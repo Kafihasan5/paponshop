@@ -51,7 +51,6 @@ fun ProductsScreen(
     var productToEdit by remember { mutableStateOf<Product?>(null) }
     var isAddingNew by remember { mutableStateOf(false) }
     var productForStockAdjust by remember { mutableStateOf<Product?>(null) }
-    var showDeleteDummyDialog by remember { mutableStateOf(false) }
 
     val filteredProducts = remember(products, searchQuery, selectedCatId, showOnlyLowStock) {
 
@@ -121,19 +120,6 @@ fun ProductsScreen(
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
-
-                        if (products.isNotEmpty()) {
-                            OutlinedButton(
-                                onClick = { showDeleteDummyDialog = true },
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = StatusDanger),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.height(34.dp)
-                            ) {
-                                Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("ডামি মুছুন", fontSize = 12.sp)
-                            }
-                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -294,7 +280,7 @@ fun ProductsScreen(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                if (products.isEmpty()) "নিচের বাটনে চাপ দিয়ে আপনার আসল পণ্য যোগ করুন অথবা ডেমো পণ্য লোড করুন।" else "অন্য নাম বা বারকোড দিয়ে চেষ্টা করুন।",
+                                if (products.isEmpty()) "নিচের বাটনে চাপ দিয়ে আপনার আসল পণ্য যোগ করুন।" else "অন্য নাম বা বারকোড দিয়ে চেষ্টা করুন।",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -308,14 +294,6 @@ fun ProductsScreen(
                                     Icon(Icons.Default.Add, contentDescription = null)
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text("প্রথম পণ্য যোগ করুন")
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                TextButton(
-                                    onClick = { viewModel.resetAllData() }
-                                ) {
-                                    Icon(Icons.Default.RestartAlt, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("স্যাম্পল ডামি পণ্য লোড করুন")
                                 }
                             }
                         }
@@ -342,35 +320,6 @@ fun ProductsScreen(
             }
         }
     }
-    }
-
-    // Delete All Dummy Data Dialog
-    if (showDeleteDummyDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDummyDialog = false },
-            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = StatusDanger) },
-            title = { Text("সব ডামি ডেটা মুছে ফেলতে চান?") },
-            text = {
-                Text("দোকানের সকল স্যাম্পল বা ডামি পণ্য, বিক্রির রেকর্ড, কাস্টমার তালিকা ও বাকি খাতা সম্পূর্ণ মুছে যাবে। আপনার দোকান সম্পূর্ণ খালি হয়ে যাবে যাতে আপনি আপনার আসল পণ্যের হিসাব শুরু করতে পারেন।")
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.clearAllDummyData {
-                            showDeleteDummyDialog = false
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = StatusDanger)
-                ) {
-                    Text("হ্যাঁ, সব ডামি ডেটা মুছুন")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDummyDialog = false }) {
-                    Text("বাতিল")
-                }
-            }
-        )
     }
 
 

@@ -46,14 +46,7 @@ fun SettingsScreen(
     var allowNegativeStock by remember { mutableStateOf(config.allowNegativeStock) }
     var showClearDummyDialog by remember { mutableStateOf(false) }
     var showResetSampleDialog by remember { mutableStateOf(false) }
-    var showPublishVersionDialog by remember { mutableStateOf(false) }
     var showInAppSettingsUpdateDialog by remember { mutableStateOf(false) }
-
-    // Version publish form fields
-    var pubVersionCode by remember { mutableStateOf("2") }
-    var pubVersionName by remember { mutableStateOf("1.1.0") }
-    var pubReleaseNotes by remember { mutableStateOf("নতুন দ্রুততর ফিচার ও বাগ ফিক্স যুক্ত করা হয়েছে") }
-    var pubApkUrl by remember { mutableStateOf("https://github.com") }
 
     val isSyncing by viewModel.isSyncing.collectAsState()
     val lastSyncTime by viewModel.lastSyncTime.collectAsState()
@@ -569,19 +562,6 @@ fun SettingsScreen(
                                 }
                             }
                         }
-
-                        // In-App Version Publisher (Available for Admin/Owner)
-                        Divider()
-                        Button(
-                            onClick = { showPublishVersionDialog = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(Icons.Default.Publish, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("নতুন ভার্সন রিলিজ প্রকাশ করুন (Publisher)")
-                        }
                     }
                 }
             }
@@ -677,92 +657,6 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showResetSampleDialog = false }) {
-                    Text("বাতিল")
-                }
-            }
-        )
-    }
-
-    if (showPublishVersionDialog) {
-        AlertDialog(
-            onDismissRequest = { showPublishVersionDialog = false },
-            icon = { Icon(Icons.Default.Publish, contentDescription = null, tint = MaterialTheme.colorScheme.secondary) },
-            title = { Text("নতুন ভার্সন রিলিজ প্রকাশ করুন") },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            "💡 নির্দেশিকা:\n১. প্রতিটি নতুন রিলিজের জন্য ভার্সন কোড আগের চেয়ে ১ বড় দিন (যেমন: ২, ৩)।\n২. গুগল ড্রাইভ, ড্রপবক্স বা গিটহাবের ডিরেক্ট APK ডাউনলোড লিংক দিন।\n৩. প্রকাশ করার সাথে সাথেই অন্যান্য সব অ্যাপে স্বয়ংক্রিয় আপডেট নোটিফিকেশন চলে যাবে।",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(8.dp),
-                            lineHeight = 16.sp
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = pubVersionName,
-                        onValueChange = { pubVersionName = it },
-                        label = { Text("ভার্সন নাম (যেমন 1.1.0)") },
-                        placeholder = { Text("1.1.0") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = pubVersionCode,
-                        onValueChange = { pubVersionCode = it.filter { c -> c.isDigit() } },
-                        label = { Text("ভার্সন কোড (যেমন 2, 3...)") },
-                        placeholder = { Text("2") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = pubReleaseNotes,
-                        onValueChange = { pubReleaseNotes = it },
-                        label = { Text("নতুন কী কী পরিবর্তন করা হয়েছে") },
-                        placeholder = { Text("যেমন: নতুন ফিচার যোগ ও বাগ ফিক্স...") },
-                        maxLines = 3,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = pubApkUrl,
-                        onValueChange = { pubApkUrl = it },
-                        label = { Text("APK ডাউনলোড লিংক") },
-                        placeholder = { Text("https://...") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val code = pubVersionCode.toIntOrNull() ?: 2
-                        viewModel.publishNewVersion(
-                            versionCode = code,
-                            versionName = pubVersionName.trim(),
-                            updateNotes = pubReleaseNotes.trim(),
-                            apkUrl = pubApkUrl.trim()
-                        ) {
-                            showPublishVersionDialog = false
-                        }
-                    },
-                    enabled = pubVersionName.isNotBlank() && pubVersionCode.isNotBlank()
-                ) {
-                    Text("অনলাইনে প্রকাশ করুন")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPublishVersionDialog = false }) {
                     Text("বাতিল")
                 }
             }
