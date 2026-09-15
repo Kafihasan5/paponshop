@@ -563,6 +563,48 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun returnSaleItems(
+        saleId: Long,
+        returnedItems: Map<Long, Double>,
+        onSuccess: (() -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val success = repository.returnSaleItems(saleId, returnedItems)
+            if (success) {
+                showToast("পণ্য সফলভাবে ফেরত নেওয়া হয়েছে এবং স্টক সমন্বয় করা হয়েছে")
+                if (_lastCompletedSale.value?.id == saleId) {
+                    val updated = repository.getSaleById(saleId)
+                    _lastCompletedSale.value = updated
+                    if (updated != null) {
+                        _lastCompletedSaleItems.value = repository.getSaleItems(saleId)
+                    }
+                }
+                onSuccess?.invoke()
+            } else {
+                showToast("পণ্য ফেরত প্রক্রিয়া করা যায়নি")
+            }
+        }
+    }
+
+    fun returnFullSale(saleId: Long, onSuccess: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            val success = repository.returnFullSale(saleId)
+            if (success) {
+                showToast("সম্পূর্ণ বিক্রয় ফেরত নেওয়া হয়েছে এবং স্টক সমন্বয় করা হয়েছে")
+                if (_lastCompletedSale.value?.id == saleId) {
+                    val updated = repository.getSaleById(saleId)
+                    _lastCompletedSale.value = updated
+                    if (updated != null) {
+                        _lastCompletedSaleItems.value = repository.getSaleItems(saleId)
+                    }
+                }
+                onSuccess?.invoke()
+            } else {
+                showToast("বিক্রয় ফেরত প্রক্রিয়া করা যায়নি")
+            }
+        }
+    }
+
     fun adjustStock(productId: Long, productName: String, qtyChange: Double, reason: String, note: String?) {
         viewModelScope.launch {
             repository.adjustStock(productId, productName, qtyChange, reason, note)

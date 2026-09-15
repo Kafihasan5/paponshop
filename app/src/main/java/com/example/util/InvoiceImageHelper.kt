@@ -103,9 +103,15 @@ object InvoiceImageHelper {
 
         // Memo Type Badge
         y += 38f
-        val badgeText = if (isDue) "বাকি বিক্রয় মেমো (Due Invoice)" else "ক্যাশ মেমো / বিক্রয় ইনভয়েস"
-        val badgeColor = if (isDue) c(0xFFDC2626) else c(0xFF059669)
-        val badgeBg = if (isDue) c(0xFFFEF2F2) else c(0xFFECFDF5)
+        val badgeText = if (sale.isReturned) {
+            "ফেরতকৃত মেমো (RETURNED)"
+        } else if (isDue) {
+            "বাকি বিক্রয় মেমো (Due Invoice)"
+        } else {
+            "ক্যাশ মেমো / বিক্রয় ইনভয়েস"
+        }
+        val badgeColor = if (sale.isReturned || isDue) c(0xFFDC2626) else c(0xFF059669)
+        val badgeBg = if (sale.isReturned || isDue) c(0xFFFEF2F2) else c(0xFFECFDF5)
 
         paint.textSize = 19f
         val badgeWidth = paint.measureText(badgeText) + 40f
@@ -729,7 +735,10 @@ object InvoiceImageHelper {
         val isDue = sale.dueAmountPoisha > 0
         val isCustomer = !sale.customerName.isNullOrBlank()
 
-        if (isDue) {
+        if (sale.isReturned) {
+            sb.appendLine("🧾 *${config.shopName} - ফেরতকৃত মেমো (RETURNED)*")
+            sb.appendLine("⚠️ এই ইনভয়েসের পণ্য ফেরত নেওয়া হয়েছে এবং স্টক সমন্বয় করা হয়েছে।")
+        } else if (isDue) {
             sb.appendLine("🧾 *${config.shopName} - বাকি বিক্রয় মেমো*")
         } else {
             sb.appendLine("🧾 *${config.shopName} - ক্যাশ মেমো / ইনভয়েস*")

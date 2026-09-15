@@ -1,6 +1,6 @@
 {
-  "versionCode": 11,
-  "versionName": "1.0.11",
-  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v11/app-debug.apk",
-  "releaseNotes": "Add JPEG/PNG digital invoice & voucher generation with WhatsApp share and Gallery save for cash sales, due sales, due statements, and payment receipts"
+  "versionCode": 12,
+  "versionName": "1.0.12",
+  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v12/app-debug.apk",
+  "releaseNotes": "Add complete Product Return system with auto stock restock, invoice item/amount deduction, customer due balance reversal, and return status badges"
 }
