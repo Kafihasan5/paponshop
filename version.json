@@ -1,6 +1,6 @@
 {
-  "versionCode": 7,
-  "versionName": "1.0.7",
-  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v7/app-debug.apk",
-  "releaseNotes": "UI update: Change কাল to গতকাল and adjust floating button position"
+  "versionCode": 8,
+  "versionName": "1.0.8",
+  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v8/app-debug.apk",
+  "releaseNotes": "Remove publisher button from Settings and dummy buttons from Products page"
 }
