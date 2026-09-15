@@ -689,6 +689,27 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun wipeAllDataCloudAndLocal(
+        password: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        if (password.trim() != "paponshop") {
+            onError("ভুল পাসওয়ার্ড! সঠিক পাসওয়ার্ড লিখুন।")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                repository.wipeAllDataCloudAndLocal()
+                clearCart()
+                showToast("ক্লাউড ও লোকাল সমস্ত ডেটা সম্পূর্ণ মুছে ফেলা হয়েছে!")
+                onSuccess()
+            } catch (e: Exception) {
+                onError("ডেটা মুছতে গিয়ে ত্রুটি হয়েছে: ${e.message}")
+            }
+        }
+    }
+
     fun restoreFromBackupJson(jsonStr: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
             val success = repository.restoreBackupFromJson(jsonStr)

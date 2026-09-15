@@ -575,6 +575,32 @@ class PaponRepository(private val dao: PaponDao) {
         }
     }
 
+    suspend fun wipeAllDataCloudAndLocal(): Boolean = withContext(Dispatchers.IO) {
+        dao.clearProducts()
+        dao.clearSales()
+        dao.clearSaleItems()
+        dao.clearCustomers()
+        dao.clearCustomerLedger()
+        dao.clearExpenses()
+        dao.clearPurchases()
+        dao.clearPurchaseItems()
+        dao.clearSuppliers()
+        dao.clearStockAdjustments()
+        dao.clearDeletedRecords()
+
+        // Ensure default grocery categories remain ready for real product additions
+        if (dao.getCategoriesSync().isEmpty()) {
+            dao.insertCategories(SampleData.getDefaultCategories())
+        }
+        if (dao.getExpenseCategoriesSync().isEmpty()) {
+            dao.insertExpenseCategories(SampleData.getDefaultExpenseCategories())
+        }
+
+        val cloudSuccess = supabaseSync.clearAllDataInSupabase()
+        supabaseSync.invalidateTableCache()
+        cloudSuccess
+    }
+
     suspend fun clearSelectiveData(
         clearSales: Boolean,
         clearProducts: Boolean,

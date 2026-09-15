@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.content.Intent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.PaponViewModel
@@ -45,8 +48,7 @@ fun SettingsScreen(
     var pinCode by remember { mutableStateOf(config.pinCode) }
     var userRole by remember { mutableStateOf(config.userRole) } // "owner" or "staff"
     var allowNegativeStock by remember { mutableStateOf(config.allowNegativeStock) }
-    var showClearDummyDialog by remember { mutableStateOf(false) }
-    var showResetSampleDialog by remember { mutableStateOf(false) }
+    var showWipeAllDataDialog by remember { mutableStateOf(false) }
     var showInAppSettingsUpdateDialog by remember { mutableStateOf(false) }
     var showCategoryUnitManager by remember { mutableStateOf(false) }
     var initialManageTab by remember { mutableStateOf(0) }
@@ -647,43 +649,48 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 5: Dummy Data & Database Management
+            // Section 5: Cloud & Local Factory Reset (Danger Zone)
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f)),
+                    border = BorderStroke(1.dp, StatusDanger.copy(alpha = 0.3f)),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("ডেটা ও ডামি ডেটা ব্যবস্থাপনা", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.WarningAmber,
+                                contentDescription = null,
+                                tint = StatusDanger
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "সকল ডেটা মুছে ফেলুন (Cloud + Local)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = StatusDanger
+                            )
+                        }
                         Text(
-                            "দোকান একদম নতুনভাবে শুরু করতে চাইলে সকল ডামি ও পরীক্ষামূলক ডেটা মুছে ফেলতে পারেন।",
+                            "ক্লাউড (Supabase) এবং ফোন (লোকাল স্টোরেজ) থেকে সকল পণ্য, বিক্রি, কাস্টমার, বাকি খাতা ও খরচের সমস্ত হিসাব সম্পূর্ণ মুছে ফ্রেশ করুন। এটি নিশ্চিত করতে পাসওয়ার্ড প্রয়োজন হবে।",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
-                        OutlinedButton(
-                            onClick = { showClearDummyDialog = true },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = StatusDanger),
-                            modifier = Modifier.fillMaxWidth()
+                        Button(
+                            onClick = { showWipeAllDataDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = StatusDanger),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp)
                         ) {
                             Icon(Icons.Default.DeleteForever, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("সব ডামি ডেটা মুছে ফেলুন (সম্পূর্ণ খালি)")
-                        }
-
-                        OutlinedButton(
-                            onClick = { showResetSampleDialog = true },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.RestartAlt, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("স্যাম্পল মুদি পণ্য ও ডামি ডেটা রিলোড করুন")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("ক্লাউড ও লোকাল ডেটা সম্পূর্ণ মুছুন", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -691,53 +698,124 @@ fun SettingsScreen(
         }
     }
 
-    if (showClearDummyDialog) {
-        AlertDialog(
-            onDismissRequest = { showClearDummyDialog = false },
-            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = StatusDanger) },
-            title = { Text("সব ডামি ডেটা মুছে ফেলবেন?") },
-            text = {
-                Text("আপনার দোকানের সকল ডামি পণ্য, স্যাম্পল কাস্টমার, বাকি খাতা ও বিক্রির রেকর্ড সম্পূর্ণ মুছে যাবে। আপনার দোকান সম্পূর্ণ খালি ও ফ্রেশ হবে যাতে আপনি আপনার নিজস্ব পণ্যের হিসাব নির্ভুলভাবে শুরু করতে পারেন।")
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.clearAllDummyData {
-                            showClearDummyDialog = false
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = StatusDanger)
-                ) {
-                    Text("হ্যাঁ, সব ডামি ডেটা মুছুন")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearDummyDialog = false }) {
-                    Text("বাতিল")
-                }
-            }
-        )
-    }
+    if (showWipeAllDataDialog) {
+        var inputPassword by remember { mutableStateOf("") }
+        var isPasswordVisible by remember { mutableStateOf(false) }
+        var errorMessage by remember { mutableStateOf<String?>(null) }
+        var isWiping by remember { mutableStateOf(false) }
 
-    if (showResetSampleDialog) {
         AlertDialog(
-            onDismissRequest = { showResetSampleDialog = false },
-            title = { Text("স্যাম্পল ডামি ডেটা লোড করবেন?") },
+            onDismissRequest = {
+                if (!isWiping) {
+                    showWipeAllDataDialog = false
+                }
+            },
+            icon = {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = StatusDanger,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    "সকল ডেটা সম্পূর্ণ মুছে ফেলবেন?",
+                    fontWeight = FontWeight.Bold,
+                    color = StatusDanger
+                )
+            },
             text = {
-                Text("২০টি পরিচিত মুদি পণ্য, ক্যাটাগরি ও স্যাম্পল খাতা এন্ট্রি পুনরায় লোড করা হবে।")
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "সতর্কতা: ক্লাউড সার্ভার (Supabase) এবং ফোন থেকে সকল পণ্য, বিক্রির রেকর্ড, কাস্টমার তালিকা, বাকি খাতা ও খরচের সমস্ত হিসাব স্থায়ীভাবে মুছে যাবে। এটি আর ফিরিয়ে আনা সম্ভব নয়!\n\nমুছে ফেলতে পাসওয়ার্ড লিখুন:",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    OutlinedTextField(
+                        value = inputPassword,
+                        onValueChange = {
+                            inputPassword = it
+                            errorMessage = null
+                        },
+                        label = { Text("নিরাপত্তা পাসওয়ার্ড") },
+                        placeholder = { Text("পাসওয়ার্ড লিখুন") },
+                        singleLine = true,
+                        isError = errorMessage != null,
+                        visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                                Icon(
+                                    if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = if (isPasswordVisible) "পাসওয়ার্ড লুকান" else "পাসওয়ার্ড দেখুন"
+                                )
+                            }
+                        },
+                        enabled = !isWiping,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (errorMessage != null) {
+                        Text(
+                            text = errorMessage ?: "",
+                            color = StatusDanger,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    if (isWiping) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp,
+                                color = StatusDanger
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text("ক্লাউড ও লোকাল ডেটা মোছা হচ্ছে...", fontSize = 13.sp)
+                        }
+                    }
+                }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.resetAllData()
-                        showResetSampleDialog = false
-                    }
+                        if (inputPassword.trim() != "paponshop") {
+                            errorMessage = "ভুল পাসওয়ার্ড! সঠিক পাসওয়ার্ড লিখুন।"
+                            return@Button
+                        }
+                        isWiping = true
+                        errorMessage = null
+                        viewModel.wipeAllDataCloudAndLocal(
+                            password = inputPassword,
+                            onSuccess = {
+                                isWiping = false
+                                showWipeAllDataDialog = false
+                            },
+                            onError = { err ->
+                                isWiping = false
+                                errorMessage = err
+                            }
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusDanger),
+                    enabled = !isWiping && inputPassword.isNotBlank()
                 ) {
-                    Text("লোড করুন")
+                    Text("হ্যাঁ, সব ডেটা মুছুন")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showResetSampleDialog = false }) {
+                TextButton(
+                    onClick = { showWipeAllDataDialog = false },
+                    enabled = !isWiping
+                ) {
                     Text("বাতিল")
                 }
             }
