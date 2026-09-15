@@ -3,9 +3,11 @@ package com.example.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.BuildConfig
 import com.example.data.db.PaponDatabase
 import com.example.data.entity.*
 import com.example.data.repository.PaponRepository
+import com.example.util.AppUpdater
 import com.example.util.Formatters
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -45,10 +47,10 @@ data class ShopConfig(
 
 data class AppUpdateInfo(
     val isUpdateAvailable: Boolean = false,
-    val currentVersionName: String = "1.0.0",
-    val currentVersionCode: Int = 1,
-    val latestVersionName: String = "1.0.0",
-    val latestVersionCode: Int = 1,
+    val currentVersionName: String = BuildConfig.VERSION_NAME,
+    val currentVersionCode: Int = BuildConfig.VERSION_CODE,
+    val latestVersionName: String = BuildConfig.VERSION_NAME,
+    val latestVersionCode: Int = BuildConfig.VERSION_CODE,
     val updateNotes: String = "",
     val apkDownloadUrl: String = "",
     val isForceUpdate: Boolean = false
@@ -106,6 +108,8 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
             syncToSupabase(silent = true)
             // Start automatic background poll (pulls changes made in Supabase every 5s for realtime updates)
             startPeriodicSync()
+            // Check for in-app updates from GitHub
+            checkForUpdates(silent = true)
         }
     }
 
@@ -153,8 +157,8 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
         val apkUrl = updates["apk_download_url"] ?: ""
         val isForce = updates["is_force_update"]?.toBoolean() ?: false
 
-        val currentCode = 1
-        val currentName = "1.0.0"
+        val currentCode = BuildConfig.VERSION_CODE
+        val currentName = BuildConfig.VERSION_NAME
 
         _appUpdateInfo.value = AppUpdateInfo(
             isUpdateAvailable = remoteVersionCode > currentCode,
@@ -545,6 +549,14 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deleteSale(saleId: Long, onSuccess: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            repository.deleteSale(saleId)
+            showToast("বিক্রয় রেকর্ড মুছে ফেলা হয়েছে")
+            onSuccess?.invoke()
+        }
+    }
+
     fun adjustStock(productId: Long, productName: String, qtyChange: Double, reason: String, note: String?) {
         viewModelScope.launch {
             repository.adjustStock(productId, productName, qtyChange, reason, note)
@@ -558,6 +570,14 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
             repository.saveCustomer(customer)
             showToast("কাস্টমার সফলভাবে যোগ করা হয়েছে")
             onSuccess()
+        }
+    }
+
+    fun deleteCustomer(customerId: Long, onSuccess: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            repository.deleteCustomer(customerId)
+            showToast("কাস্টমার ও তার খাতা মুছে ফেলা হয়েছে")
+            onSuccess?.invoke()
         }
     }
 
@@ -586,6 +606,22 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deleteSupplier(supplierId: Long, onSuccess: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            repository.deleteSupplier(supplierId)
+            showToast("সাপ্লায়ার মুছে ফেলা হয়েছে")
+            onSuccess?.invoke()
+        }
+    }
+
+    fun deletePurchase(purchaseId: Long, onSuccess: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            repository.deletePurchase(purchaseId)
+            showToast("ক্রয় রেকর্ড মুছে ফেলা হয়েছে")
+            onSuccess?.invoke()
+        }
+    }
+
     fun recordPurchase(
         purchase: Purchase,
         items: List<PurchaseItem>,
@@ -610,6 +646,14 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
             repository.addExpense(expense)
             showToast("খরচ যোগ করা হয়েছে")
             onSuccess()
+        }
+    }
+
+    fun deleteExpense(expenseId: Long, onSuccess: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            repository.deleteExpense(expenseId)
+            showToast("খরচ মুছে ফেলা হয়েছে")
+            onSuccess?.invoke()
         }
     }
 
@@ -695,6 +739,24 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
     fun checkForUpdates(silent: Boolean = false) {
         viewModelScope.launch {
             try {
+                val gitUpdate = AppUpdater.checkForUpdate()
+                if (gitUpdate != null) {
+                    _appUpdateInfo.value = AppUpdateInfo(
+                        isUpdateAvailable = true,
+                        currentVersionName = BuildConfig.VERSION_NAME,
+                        currentVersionCode = BuildConfig.VERSION_CODE,
+                        latestVersionName = gitUpdate.versionName,
+                        latestVersionCode = gitUpdate.versionCode,
+                        updateNotes = gitUpdate.releaseNotes,
+                        apkDownloadUrl = gitUpdate.downloadUrl,
+                        isForceUpdate = false
+                    )
+                    if (!silent) {
+                        showToast("নতুন আপডেট পাওয়া গেছে: v${gitUpdate.versionName}")
+                    }
+                    return@launch
+                }
+
                 val res = repository.pullFromSupabase(force = true)
                 if (res.configUpdates.isNotEmpty()) {
                     applyRemoteConfig(res.configUpdates)
@@ -703,7 +765,7 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
                     if (_appUpdateInfo.value.isUpdateAvailable) {
                         showToast("নতুন আপডেট পাওয়া গেছে: v${_appUpdateInfo.value.latestVersionName}")
                     } else {
-                        showToast("আপনার অ্যাপটি সম্পূর্ণ আপ-টু-ডেট (v1.0.0)")
+                        showToast("আপনার অ্যাপটি সম্পূর্ণ আপ-টু-ডেট (v${BuildConfig.VERSION_NAME})")
                     }
                 }
             } catch (e: Exception) {

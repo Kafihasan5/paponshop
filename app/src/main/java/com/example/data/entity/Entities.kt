@@ -178,3 +178,10 @@ data class BackupLog(
     val recordCount: Int,
     val createdAt: Long = System.currentTimeMillis()
 )
+
+@Entity(tableName = "deleted_records", primaryKeys = ["tableName", "recordId"])
+data class DeletedRecord(
+    val tableName: String,
+    val recordId: Long,
+    val deletedAt: Long = System.currentTimeMillis()
+)

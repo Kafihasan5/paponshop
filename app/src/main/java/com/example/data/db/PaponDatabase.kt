@@ -22,9 +22,10 @@ import com.example.data.entity.*
         ExpenseCategory::class,
         Expense::class,
         StockAdjustment::class,
-        BackupLog::class
+        BackupLog::class,
+        DeletedRecord::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class PaponDatabase : RoomDatabase() {

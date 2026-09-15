@@ -780,7 +780,8 @@ fun DashboardScreen(
                     sale = sale,
                     items = itemsForSale,
                     config = config,
-                    onViewReceipt = { viewModel.viewSaleReceipt(sale) }
+                    onViewReceipt = { viewModel.viewSaleReceipt(sale) },
+                    onDeleteSale = { viewModel.deleteSale(sale.id) }
                 )
             }
 
@@ -1118,9 +1119,11 @@ fun DashboardSaleItemCard(
     sale: Sale,
     items: List<com.example.data.entity.SaleItem>,
     config: ShopConfig,
-    onViewReceipt: () -> Unit
+    onViewReceipt: () -> Unit,
+    onDeleteSale: () -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -1288,22 +1291,62 @@ fun DashboardSaleItemCard(
                     }
                 }
 
-                OutlinedButton(
-                    onClick = onViewReceipt,
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier.height(34.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Receipt,
-                        contentDescription = "রসিদ",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("রসিদ দেখুন", fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(
+                        onClick = onViewReceipt,
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Receipt,
+                            contentDescription = "রসিদ",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("রসিদ দেখুন", fontSize = 12.sp)
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    IconButton(
+                        onClick = { showDeleteConfirm = true },
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = "মুছুন",
+                            tint = StatusDanger.copy(alpha = 0.8f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("বিক্রয় রেকর্ড মুছুন") },
+            text = { Text("ইনভয়েস নং ${sale.invoiceNo}-এর রেকর্ডটি মুছে ফেলতে চান?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDeleteSale()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusDanger)
+                ) {
+                    Text("মুছুন")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("বাতিল")
+                }
+            }
+        )
     }
 }
 

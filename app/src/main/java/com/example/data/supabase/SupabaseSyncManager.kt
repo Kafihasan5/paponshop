@@ -102,6 +102,103 @@ class SupabaseSyncManager(private val dao: PaponDao) {
         }
     }
 
+    suspend fun deleteFromSupabase(table: String, column: String, value: Any): Boolean = withContext(Dispatchers.IO) {
+        if (apiKey.isBlank() || baseUrl.isBlank()) return@withContext false
+        try {
+            val url = "$baseUrl/$table?$column=eq.$value"
+            val requestBuilder = Request.Builder()
+                .url(url)
+                .delete()
+
+            createHeaders(upsert = false).forEach { (k, v) ->
+                requestBuilder.addHeader(k, v)
+            }
+
+            val response = client.newCall(requestBuilder.build()).execute()
+            val code = response.code
+            val isSuccess = response.isSuccessful || code in 200..204
+            if (!isSuccess) {
+                val err = response.body?.string() ?: ""
+                Log.w(tag, "Supabase DELETE $table?$column=eq.$value failed ($code): $err")
+            } else {
+                Log.d(tag, "Supabase DELETE $table?$column=eq.$value succeeded ($code)")
+            }
+            response.close()
+            isSuccess
+        } catch (e: Exception) {
+            Log.w(tag, "Supabase DELETE network error on $table: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun deleteFromSupabaseFilter(table: String, filterQuery: String): Boolean = withContext(Dispatchers.IO) {
+        if (apiKey.isBlank() || baseUrl.isBlank()) return@withContext false
+        try {
+            val url = "$baseUrl/$table?$filterQuery"
+            val requestBuilder = Request.Builder()
+                .url(url)
+                .delete()
+
+            createHeaders(upsert = false).forEach { (k, v) ->
+                requestBuilder.addHeader(k, v)
+            }
+
+            val response = client.newCall(requestBuilder.build()).execute()
+            val code = response.code
+            val isSuccess = response.isSuccessful || code in 200..204
+            if (!isSuccess) {
+                val err = response.body?.string() ?: ""
+                Log.w(tag, "Supabase DELETE filter $table?$filterQuery failed ($code): $err")
+            }
+            response.close()
+            isSuccess
+        } catch (e: Exception) {
+            Log.w(tag, "Supabase DELETE filter error on $table: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun clearTableInSupabase(table: String): Boolean = withContext(Dispatchers.IO) {
+        val res = deleteFromSupabaseFilter(table, "id=gte.0")
+        invalidateTableCache()
+        res
+    }
+
+    suspend fun clearAllDataInSupabase(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            clearTableInSupabase("sale_items")
+            clearTableInSupabase("sales")
+            clearTableInSupabase("customer_ledger")
+            clearTableInSupabase("customers")
+            clearTableInSupabase("purchase_items")
+            clearTableInSupabase("purchases")
+            clearTableInSupabase("suppliers")
+            clearTableInSupabase("expenses")
+            clearTableInSupabase("products")
+            clearTableInSupabase("stock_adjustments")
+            dao.clearDeletedRecords()
+            invalidateTableCache()
+            true
+        } catch (e: Exception) {
+            Log.w(tag, "Error clearing Supabase: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun flushPendingDeletions() = withContext(Dispatchers.IO) {
+        try {
+            val pending = dao.getAllDeletedRecords()
+            for (rec in pending) {
+                val ok = deleteFromSupabase(rec.tableName, "id", rec.recordId)
+                if (ok) {
+                    dao.removeDeletedRecord(rec.tableName, rec.recordId)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(tag, "Error flushing pending deletions: ${e.message}")
+        }
+    }
+
     @Throws(java.io.IOException::class)
     suspend fun getJsonArray(table: String, onlyIfChanged: Boolean = false): JSONArray? = withContext(Dispatchers.IO) {
         if (apiKey.isBlank() || baseUrl.isBlank()) return@withContext null
@@ -136,6 +233,7 @@ class SupabaseSyncManager(private val dao: PaponDao) {
 
     /**
      * Pull remote changes from remote database into local Room database (Auto-update).
+     * Strictly respects local deletions (App is main priority).
      * If remote data is unchanged, skips writing to Room so the app remains silky smooth.
      */
     suspend fun pullFromSupabase(force: Boolean = false): SyncResult = withContext(Dispatchers.IO) {
@@ -144,6 +242,17 @@ class SupabaseSyncManager(private val dao: PaponDao) {
             var salesCount = 0
             val configMap = mutableMapOf<String, String>()
             val checkChanges = !force
+
+            // Local deleted records sets (App priority - never resurrect deleted items)
+            val deletedProductIds = dao.getDeletedRecordIds("products").toSet()
+            val deletedCustomerIds = dao.getDeletedRecordIds("customers").toSet()
+            val deletedSaleIds = dao.getDeletedRecordIds("sales").toSet()
+            val deletedSaleItemIds = dao.getDeletedRecordIds("sale_items").toSet()
+            val deletedLedgerIds = dao.getDeletedRecordIds("customer_ledger").toSet()
+            val deletedExpenseIds = dao.getDeletedRecordIds("expenses").toSet()
+            val deletedSupplierIds = dao.getDeletedRecordIds("suppliers").toSet()
+            val deletedPurchaseIds = dao.getDeletedRecordIds("purchases").toSet()
+            val deletedPurchaseItemIds = dao.getDeletedRecordIds("purchase_items").toSet()
 
             suspend fun fetchSafely(table: String): JSONArray? {
                 return try {
@@ -180,11 +289,18 @@ class SupabaseSyncManager(private val dao: PaponDao) {
             val productsArr = fetchSafely("products")
             if (productsArr != null && productsArr.length() > 0) {
                 val list = mutableListOf<Product>()
+                val ghostDeletes = mutableListOf<Long>()
                 for (i in 0 until productsArr.length()) {
                     val obj = productsArr.getJSONObject(i)
+                    val id = obj.getLong("id")
+                    val isActive = obj.optBoolean("is_active", true)
+                    if (id in deletedProductIds || !isActive) {
+                        ghostDeletes.add(id)
+                        continue
+                    }
                     list.add(
                         Product(
-                            id = obj.getLong("id"),
+                            id = id,
                             nameBn = obj.optString("name_bn", ""),
                             nameEn = obj.optString("name_en", ""),
                             categoryId = obj.optLong("category_id", 1L),
@@ -197,13 +313,18 @@ class SupabaseSyncManager(private val dao: PaponDao) {
                             minStock = obj.optDouble("min_stock", 5.0),
                             expiryDate = if (obj.isNull("expiry_date")) null else obj.optString("expiry_date"),
                             supplierId = if (obj.isNull("supplier_id")) null else obj.optLong("supplier_id"),
-                            isActive = obj.optBoolean("is_active", true),
+                            isActive = true,
                             createdAt = obj.optLong("created_at", System.currentTimeMillis()),
                             updatedAt = obj.optLong("updated_at", System.currentTimeMillis())
                         )
                     )
                 }
-                dao.insertProducts(list)
+                if (list.isNotEmpty()) {
+                    dao.insertProducts(list)
+                }
+                for (gid in ghostDeletes) {
+                    deleteFromSupabase("products", "id", gid)
+                }
                 productCount = list.size
             }
 
@@ -211,32 +332,50 @@ class SupabaseSyncManager(private val dao: PaponDao) {
             val customersArr = fetchSafely("customers")
             if (customersArr != null && customersArr.length() > 0) {
                 val list = mutableListOf<Customer>()
+                val ghostDeletes = mutableListOf<Long>()
                 for (i in 0 until customersArr.length()) {
                     val obj = customersArr.getJSONObject(i)
+                    val id = obj.getLong("id")
+                    val isActive = obj.optBoolean("is_active", true)
+                    if (id in deletedCustomerIds || !isActive) {
+                        ghostDeletes.add(id)
+                        continue
+                    }
                     list.add(
                         Customer(
-                            id = obj.getLong("id"),
+                            id = id,
                             name = obj.optString("name", ""),
                             phone = obj.optString("phone", ""),
                             address = if (obj.isNull("address")) null else obj.optString("address"),
                             creditLimitPoisha = obj.optLong("credit_limit_poisha", 0L),
-                            isActive = obj.optBoolean("is_active", true),
+                            isActive = true,
                             createdAt = obj.optLong("created_at", System.currentTimeMillis())
                         )
                     )
                 }
-                dao.insertCustomers(list)
+                if (list.isNotEmpty()) {
+                    dao.insertCustomers(list)
+                }
+                for (gid in ghostDeletes) {
+                    deleteFromSupabase("customers", "id", gid)
+                }
             }
 
             // 4. Sales & Sale Items
             val salesArr = fetchSafely("sales")
             if (salesArr != null && salesArr.length() > 0) {
                 val list = mutableListOf<Sale>()
+                val ghostDeletes = mutableListOf<Long>()
                 for (i in 0 until salesArr.length()) {
                     val obj = salesArr.getJSONObject(i)
+                    val id = obj.getLong("id")
+                    if (id in deletedSaleIds) {
+                        ghostDeletes.add(id)
+                        continue
+                    }
                     list.add(
                         Sale(
-                            id = obj.getLong("id"),
+                            id = id,
                             invoiceNo = obj.optString("invoice_no", ""),
                             customerId = if (obj.isNull("customer_id")) null else obj.optLong("customer_id"),
                             customerName = if (obj.isNull("customer_name")) null else obj.optString("customer_name"),
@@ -255,19 +394,31 @@ class SupabaseSyncManager(private val dao: PaponDao) {
                         )
                     )
                 }
-                dao.insertSales(list)
+                if (list.isNotEmpty()) {
+                    dao.insertSales(list)
+                }
+                for (gid in ghostDeletes) {
+                    deleteFromSupabase("sales", "id", gid)
+                }
                 salesCount = list.size
             }
 
             val itemsArr = fetchSafely("sale_items")
             if (itemsArr != null && itemsArr.length() > 0) {
                 val list = mutableListOf<SaleItem>()
+                val ghostDeletes = mutableListOf<Long>()
                 for (i in 0 until itemsArr.length()) {
                     val obj = itemsArr.getJSONObject(i)
+                    val id = obj.getLong("id")
+                    val saleId = obj.getLong("sale_id")
+                    if (id in deletedSaleItemIds || saleId in deletedSaleIds) {
+                        ghostDeletes.add(id)
+                        continue
+                    }
                     list.add(
                         SaleItem(
-                            id = obj.getLong("id"),
-                            saleId = obj.getLong("sale_id"),
+                            id = id,
+                            saleId = saleId,
                             productId = obj.optLong("product_id", 0L),
                             productName = obj.optString("product_name", ""),
                             unitName = obj.optString("unit_name", "পিস"),
@@ -279,19 +430,31 @@ class SupabaseSyncManager(private val dao: PaponDao) {
                         )
                     )
                 }
-                dao.insertSaleItems(list)
+                if (list.isNotEmpty()) {
+                    dao.insertSaleItems(list)
+                }
+                for (gid in ghostDeletes) {
+                    deleteFromSupabase("sale_items", "id", gid)
+                }
             }
 
             // 5. Customer Ledger
             val ledgerArr = fetchSafely("customer_ledger")
             if (ledgerArr != null && ledgerArr.length() > 0) {
                 val list = mutableListOf<CustomerLedger>()
+                val ghostDeletes = mutableListOf<Long>()
                 for (i in 0 until ledgerArr.length()) {
                     val obj = ledgerArr.getJSONObject(i)
+                    val id = obj.getLong("id")
+                    val custId = obj.getLong("customer_id")
+                    if (id in deletedLedgerIds || custId in deletedCustomerIds) {
+                        ghostDeletes.add(id)
+                        continue
+                    }
                     list.add(
                         CustomerLedger(
-                            id = obj.getLong("id"),
-                            customerId = obj.getLong("customer_id"),
+                            id = id,
+                            customerId = custId,
                             refType = obj.optString("ref_type", "sale"),
                             refId = if (obj.isNull("ref_id")) null else obj.optLong("ref_id"),
                             debitPoisha = obj.optLong("debit_poisha", 0L),
@@ -302,18 +465,29 @@ class SupabaseSyncManager(private val dao: PaponDao) {
                         )
                     )
                 }
-                dao.insertCustomerLedgers(list)
+                if (list.isNotEmpty()) {
+                    dao.insertCustomerLedgers(list)
+                }
+                for (gid in ghostDeletes) {
+                    deleteFromSupabase("customer_ledger", "id", gid)
+                }
             }
 
             // 6. Expenses
             val expensesArr = fetchSafely("expenses")
             if (expensesArr != null && expensesArr.length() > 0) {
                 val list = mutableListOf<Expense>()
+                val ghostDeletes = mutableListOf<Long>()
                 for (i in 0 until expensesArr.length()) {
                     val obj = expensesArr.getJSONObject(i)
+                    val id = obj.getLong("id")
+                    if (id in deletedExpenseIds) {
+                        ghostDeletes.add(id)
+                        continue
+                    }
                     list.add(
                         Expense(
-                            id = obj.getLong("id"),
+                            id = id,
                             categoryId = obj.optLong("category_id", 1L),
                             categoryName = obj.optString("category_name", ""),
                             amountPoisha = obj.optLong("amount_poisha", 0L),
@@ -323,38 +497,61 @@ class SupabaseSyncManager(private val dao: PaponDao) {
                         )
                     )
                 }
-                dao.insertExpenses(list)
+                if (list.isNotEmpty()) {
+                    dao.insertExpenses(list)
+                }
+                for (gid in ghostDeletes) {
+                    deleteFromSupabase("expenses", "id", gid)
+                }
             }
 
             // 7. Suppliers & Purchases
             val suppliersArr = fetchSafely("suppliers")
             if (suppliersArr != null && suppliersArr.length() > 0) {
                 val list = mutableListOf<Supplier>()
+                val ghostDeletes = mutableListOf<Long>()
                 for (i in 0 until suppliersArr.length()) {
                     val obj = suppliersArr.getJSONObject(i)
+                    val id = obj.getLong("id")
+                    val isActive = obj.optBoolean("is_active", true)
+                    if (id in deletedSupplierIds || !isActive) {
+                        ghostDeletes.add(id)
+                        continue
+                    }
                     list.add(
                         Supplier(
-                            id = obj.getLong("id"),
+                            id = id,
                             name = obj.optString("name", ""),
                             phone = obj.optString("phone", ""),
                             company = if (obj.isNull("company")) null else obj.optString("company"),
                             address = if (obj.isNull("address")) null else obj.optString("address"),
-                            isActive = obj.optBoolean("is_active", true),
+                            isActive = true,
                             createdAt = obj.optLong("created_at", System.currentTimeMillis())
                         )
                     )
                 }
-                dao.insertSuppliers(list)
+                if (list.isNotEmpty()) {
+                    dao.insertSuppliers(list)
+                }
+                for (gid in ghostDeletes) {
+                    deleteFromSupabase("suppliers", "id", gid)
+                }
             }
 
             val purchasesArr = fetchSafely("purchases")
             if (purchasesArr != null && purchasesArr.length() > 0) {
                 val list = mutableListOf<Purchase>()
+                val ghostDeletes = mutableListOf<Long>()
                 for (i in 0 until purchasesArr.length()) {
                     val obj = purchasesArr.getJSONObject(i)
+                    val id = obj.getLong("id")
+                    if (id in deletedPurchaseIds) {
+                        ghostDeletes.add(id)
+                        continue
+                    }
                     list.add(
                         Purchase(
-                            id = obj.getLong("id"),
+                            id = id,
                             invoiceNo = obj.optString("invoice_no", ""),
                             supplierId = obj.optLong("supplier_id", 0L),
                             supplierName = obj.optString("supplier_name", ""),
@@ -367,18 +564,30 @@ class SupabaseSyncManager(private val dao: PaponDao) {
                         )
                     )
                 }
-                dao.insertPurchases(list)
+                if (list.isNotEmpty()) {
+                    dao.insertPurchases(list)
+                }
+                for (gid in ghostDeletes) {
+                    deleteFromSupabase("purchases", "id", gid)
+                }
             }
 
             val purchaseItemsArr = fetchSafely("purchase_items")
             if (purchaseItemsArr != null && purchaseItemsArr.length() > 0) {
                 val list = mutableListOf<PurchaseItem>()
+                val ghostDeletes = mutableListOf<Long>()
                 for (i in 0 until purchaseItemsArr.length()) {
                     val obj = purchaseItemsArr.getJSONObject(i)
+                    val id = obj.getLong("id")
+                    val purchaseId = obj.getLong("purchase_id")
+                    if (id in deletedPurchaseItemIds || purchaseId in deletedPurchaseIds) {
+                        ghostDeletes.add(id)
+                        continue
+                    }
                     list.add(
                         PurchaseItem(
-                            id = obj.getLong("id"),
-                            purchaseId = obj.getLong("purchase_id"),
+                            id = id,
+                            purchaseId = purchaseId,
                             productId = obj.optLong("product_id", 0L),
                             productName = obj.optString("product_name", ""),
                             qty = obj.optDouble("qty", 1.0),
@@ -387,7 +596,12 @@ class SupabaseSyncManager(private val dao: PaponDao) {
                         )
                     )
                 }
-                dao.insertPurchaseItems(list)
+                if (list.isNotEmpty()) {
+                    dao.insertPurchaseItems(list)
+                }
+                for (gid in ghostDeletes) {
+                    deleteFromSupabase("purchase_items", "id", gid)
+                }
             }
 
             // 8. Remote App Config / Features
@@ -637,9 +851,10 @@ class SupabaseSyncManager(private val dao: PaponDao) {
     }
 
     /**
-     * Complete Two-Way Sync (Pull cloud updates, then push local mutations).
+     * Complete Two-Way Sync (Flush pending deletions first, pull cloud updates respecting app deletions, then push local mutations).
      */
     suspend fun syncTwoWay(): SyncResult = withContext(Dispatchers.IO) {
+        flushPendingDeletions()
         val pullResult = pullFromSupabase()
         if (pullResult.success || !pullResult.isNetworkError) {
             syncAllLocalToSupabase()
@@ -820,5 +1035,32 @@ class SupabaseSyncManager(private val dao: PaponDao) {
         if (affectedProducts.isNotEmpty()) {
             syncProducts(affectedProducts)
         }
+    }
+
+    suspend fun deleteProductFromSupabase(productId: Long) = withContext(Dispatchers.IO) {
+        deleteFromSupabase("products", "id", productId)
+    }
+
+    suspend fun deleteSaleFromSupabase(saleId: Long) = withContext(Dispatchers.IO) {
+        deleteFromSupabase("sale_items", "sale_id", saleId)
+        deleteFromSupabase("sales", "id", saleId)
+    }
+
+    suspend fun deleteCustomerFromSupabase(customerId: Long) = withContext(Dispatchers.IO) {
+        deleteFromSupabase("customer_ledger", "customer_id", customerId)
+        deleteFromSupabase("customers", "id", customerId)
+    }
+
+    suspend fun deleteExpenseFromSupabase(expenseId: Long) = withContext(Dispatchers.IO) {
+        deleteFromSupabase("expenses", "id", expenseId)
+    }
+
+    suspend fun deleteSupplierFromSupabase(supplierId: Long) = withContext(Dispatchers.IO) {
+        deleteFromSupabase("suppliers", "id", supplierId)
+    }
+
+    suspend fun deletePurchaseFromSupabase(purchaseId: Long) = withContext(Dispatchers.IO) {
+        deleteFromSupabase("purchase_items", "purchase_id", purchaseId)
+        deleteFromSupabase("purchases", "id", purchaseId)
     }
 }

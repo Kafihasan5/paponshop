@@ -135,7 +135,11 @@ fun PurchasesScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(purchases, key = { it.id }) { pur ->
-                        PurchaseItemCard(purchase = pur, config = config)
+                        PurchaseItemCard(
+                            purchase = pur,
+                            config = config,
+                            onDelete = { viewModel.deletePurchase(pur.id) }
+                        )
                     }
                 }
             }
@@ -169,7 +173,13 @@ fun PurchasesScreen(
 }
 
 @Composable
-fun PurchaseItemCard(purchase: Purchase, config: ShopConfig) {
+fun PurchaseItemCard(
+    purchase: Purchase,
+    config: ShopConfig,
+    onDelete: () -> Unit
+) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -183,7 +193,7 @@ fun PurchaseItemCard(purchase: Purchase, config: ShopConfig) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(purchase.invoiceNo, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Text(purchase.supplierName, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
                 Text(
@@ -193,24 +203,62 @@ fun PurchaseItemCard(purchase: Purchase, config: ShopConfig) {
                 )
             }
 
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    Formatters.formatMoney(purchase.totalPoisha, config.useBengaliNumerals, config.currencySymbol),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-                if (purchase.dueAmountPoisha > 0) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        "বাকি: ${Formatters.formatMoney(purchase.dueAmountPoisha, config.useBengaliNumerals, config.currencySymbol)}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = StatusDanger
+                        Formatters.formatMoney(purchase.totalPoisha, config.useBengaliNumerals, config.currencySymbol),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
                     )
-                } else {
-                    Text("পরিশোধিত", fontSize = 11.sp, color = StatusSuccess)
+                    if (purchase.dueAmountPoisha > 0) {
+                        Text(
+                            "বাকি: ${Formatters.formatMoney(purchase.dueAmountPoisha, config.useBengaliNumerals, config.currencySymbol)}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = StatusDanger
+                        )
+                    } else {
+                        Text("পরিশোধিত", fontSize = 11.sp, color = StatusSuccess)
+                    }
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                IconButton(
+                    onClick = { showDeleteConfirm = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.DeleteOutline,
+                        contentDescription = "Delete Purchase",
+                        tint = StatusDanger.copy(alpha = 0.8f),
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("ক্রয় রেকর্ড মুছুন") },
+            text = { Text("চালান নং ${purchase.invoiceNo}-এর রেকর্ডটি মুছে ফেলতে চান?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusDanger)
+                ) {
+                    Text("মুছুন")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("বাতিল")
+                }
+            }
+        )
     }
 }
 

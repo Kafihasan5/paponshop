@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.PaponViewModel
 import com.example.ui.ShopConfig
+import com.example.ui.components.UpdateDialog
 import com.example.ui.theme.StatusDanger
 import com.example.ui.theme.StatusSuccess
 
@@ -46,6 +47,7 @@ fun SettingsScreen(
     var showClearDummyDialog by remember { mutableStateOf(false) }
     var showResetSampleDialog by remember { mutableStateOf(false) }
     var showPublishVersionDialog by remember { mutableStateOf(false) }
+    var showInAppSettingsUpdateDialog by remember { mutableStateOf(false) }
 
     // Version publish form fields
     var pubVersionCode by remember { mutableStateOf("2") }
@@ -557,13 +559,7 @@ fun SettingsScreen(
                                     Spacer(modifier = Modifier.height(10.dp))
                                     Button(
                                         onClick = {
-                                            try {
-                                                val intent = Intent(
-                                                    Intent.ACTION_VIEW,
-                                                    android.net.Uri.parse(appUpdateInfo.apkDownloadUrl.ifBlank { "https://github.com" })
-                                                )
-                                                context.startActivity(intent)
-                                            } catch (_: Exception) {}
+                                            showInAppSettingsUpdateDialog = true
                                         },
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(8.dp)
@@ -770,6 +766,16 @@ fun SettingsScreen(
                     Text("বাতিল")
                 }
             }
+        )
+    if (showInAppSettingsUpdateDialog && appUpdateInfo.isUpdateAvailable) {
+        UpdateDialog(
+            updateInfo = com.example.util.AppUpdateInfo(
+                versionCode = appUpdateInfo.latestVersionCode,
+                versionName = appUpdateInfo.latestVersionName,
+                downloadUrl = appUpdateInfo.apkDownloadUrl,
+                releaseNotes = appUpdateInfo.updateNotes
+            ),
+            onDismiss = { showInAppSettingsUpdateDialog = false }
         )
     }
 }

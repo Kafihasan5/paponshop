@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.components.FloatingNavBar
 import com.example.ui.components.QuickActionBottomSheet
+import com.example.ui.components.UpdateDialog
 import com.example.ui.screens.*
 
 @Composable
@@ -23,6 +24,14 @@ fun PaponApp(
     val isPinUnlocked by viewModel.isPinUnlocked.collectAsState()
     val toastMessage by viewModel.toastMessage.collectAsState()
     val quickActionsOpen by viewModel.quickActionsOpen.collectAsState()
+    val appUpdateInfo by viewModel.appUpdateInfo.collectAsState()
+    var showUpdateDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(appUpdateInfo.isUpdateAvailable) {
+        if (appUpdateInfo.isUpdateAvailable) {
+            showUpdateDialog = true
+        }
+    }
 
     // Handle toast messages
     LaunchedEffect(toastMessage) {
@@ -152,5 +161,18 @@ fun PaponApp(
                 }
             }
         }
+    }
+
+    // In-App Auto Update Dialog
+    if (showUpdateDialog && appUpdateInfo.isUpdateAvailable) {
+        UpdateDialog(
+            updateInfo = com.example.util.AppUpdateInfo(
+                versionCode = appUpdateInfo.latestVersionCode,
+                versionName = appUpdateInfo.latestVersionName,
+                downloadUrl = appUpdateInfo.apkDownloadUrl,
+                releaseNotes = appUpdateInfo.updateNotes
+            ),
+            onDismiss = { showUpdateDialog = false }
+        )
     }
 }

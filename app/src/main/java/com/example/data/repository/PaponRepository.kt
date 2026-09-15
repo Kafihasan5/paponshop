@@ -30,19 +30,20 @@ class PaponRepository(private val dao: PaponDao) {
     suspend fun saveProduct(product: Product): Long {
         val id = dao.insertProduct(product)
         val saved = product.copy(id = id)
+        dao.removeDeletedRecord("products", id)
         scope.launch { supabaseSync.syncProduct(saved) }
         return id
     }
     suspend fun updateProduct(product: Product) {
         dao.updateProduct(product)
+        dao.removeDeletedRecord("products", product.id)
         scope.launch { supabaseSync.syncProduct(product) }
     }
-    suspend fun deleteProduct(productId: Long) {
-        dao.softDeleteProduct(productId)
+    suspend fun deleteProduct(productId: Long) = withContext(Dispatchers.IO) {
+        dao.deleteProductById(productId)
+        dao.recordDeletedItem(DeletedRecord("products", productId))
         scope.launch {
-            dao.getProductById(productId)?.let {
-                supabaseSync.syncProduct(it.copy(isActive = false))
-            }
+            supabaseSync.deleteProductFromSupabase(productId)
         }
     }
 
@@ -133,6 +134,15 @@ class PaponRepository(private val dao: PaponDao) {
         }
     }
 
+    suspend fun deleteSale(saleId: Long) = withContext(Dispatchers.IO) {
+        dao.deleteSaleById(saleId)
+        dao.deleteSaleItemsBySaleId(saleId)
+        dao.recordDeletedItem(DeletedRecord("sales", saleId))
+        scope.launch {
+            supabaseSync.deleteSaleFromSupabase(saleId)
+        }
+    }
+
     // --- CUSTOMERS & LEDGER ---
     val allCustomers: Flow<List<Customer>> = dao.getAllCustomers()
     val totalDueFlow: Flow<Long> = dao.getTotalDueFlow()
@@ -140,12 +150,22 @@ class PaponRepository(private val dao: PaponDao) {
     suspend fun saveCustomer(customer: Customer): Long {
         val id = dao.insertCustomer(customer)
         val saved = customer.copy(id = id)
+        dao.removeDeletedRecord("customers", id)
         scope.launch { supabaseSync.syncCustomer(saved) }
         return id
     }
     suspend fun getCustomerById(id: Long): Customer? = dao.getCustomerById(id)
     fun getCustomerLedger(customerId: Long): Flow<List<CustomerLedger>> = dao.getCustomerLedger(customerId)
     fun getCustomerBalance(customerId: Long): Flow<Long> = dao.getCustomerBalanceFlow(customerId)
+
+    suspend fun deleteCustomer(customerId: Long) = withContext(Dispatchers.IO) {
+        dao.deleteCustomerById(customerId)
+        dao.deleteCustomerLedgerByCustomerId(customerId)
+        dao.recordDeletedItem(DeletedRecord("customers", customerId))
+        scope.launch {
+            supabaseSync.deleteCustomerFromSupabase(customerId)
+        }
+    }
 
     suspend fun collectDuePayment(customerId: Long, amountPoisha: Long, note: String?): Long {
         val ledger = CustomerLedger(
@@ -168,8 +188,26 @@ class PaponRepository(private val dao: PaponDao) {
     suspend fun saveSupplier(supplier: Supplier): Long {
         val id = dao.insertSupplier(supplier)
         val saved = supplier.copy(id = id)
+        dao.removeDeletedRecord("suppliers", id)
         scope.launch { supabaseSync.syncSupplier(saved) }
         return id
+    }
+
+    suspend fun deleteSupplier(supplierId: Long) = withContext(Dispatchers.IO) {
+        dao.deleteSupplierById(supplierId)
+        dao.recordDeletedItem(DeletedRecord("suppliers", supplierId))
+        scope.launch {
+            supabaseSync.deleteSupplierFromSupabase(supplierId)
+        }
+    }
+
+    suspend fun deletePurchase(purchaseId: Long) = withContext(Dispatchers.IO) {
+        dao.deletePurchaseById(purchaseId)
+        dao.deletePurchaseItemsByPurchaseId(purchaseId)
+        dao.recordDeletedItem(DeletedRecord("purchases", purchaseId))
+        scope.launch {
+            supabaseSync.deletePurchaseFromSupabase(purchaseId)
+        }
     }
 
     suspend fun recordPurchase(
@@ -177,6 +215,7 @@ class PaponRepository(private val dao: PaponDao) {
         items: List<PurchaseItem>
     ): Long = withContext(Dispatchers.IO) {
         val purchaseId = dao.insertPurchase(purchase)
+        dao.removeDeletedRecord("purchases", purchaseId)
         val preparedItems = items.map { it.copy(purchaseId = purchaseId) }
         dao.insertPurchaseItems(preparedItems)
 
@@ -225,8 +264,17 @@ class PaponRepository(private val dao: PaponDao) {
     suspend fun addExpense(expense: Expense): Long {
         val id = dao.insertExpense(expense)
         val saved = expense.copy(id = id)
+        dao.removeDeletedRecord("expenses", id)
         scope.launch { supabaseSync.syncExpense(saved) }
         return id
+    }
+
+    suspend fun deleteExpense(expenseId: Long) = withContext(Dispatchers.IO) {
+        dao.deleteExpenseById(expenseId)
+        dao.recordDeletedItem(DeletedRecord("expenses", expenseId))
+        scope.launch {
+            supabaseSync.deleteExpenseFromSupabase(expenseId)
+        }
     }
 
     // --- BACKUP & RESTORE ---
@@ -471,41 +519,12 @@ class PaponRepository(private val dao: PaponDao) {
     }
 
     suspend fun seedInitialDataIfEmpty() = withContext(Dispatchers.IO) {
-        val count = dao.getActiveProductCount()
-        if (count == 0) {
+        // Only initialize standard categories if empty; never seed dummy products/customers/suppliers
+        if (dao.getCategoriesSync().isEmpty()) {
             dao.insertCategories(SampleData.getDefaultCategories())
+        }
+        if (dao.getExpenseCategoriesSync().isEmpty()) {
             dao.insertExpenseCategories(SampleData.getDefaultExpenseCategories())
-            dao.insertProducts(SampleData.getSampleGroceryProducts())
-            for (c in SampleData.getSampleCustomers()) {
-                val custId = dao.insertCustomer(c)
-                // Seed small initial due ledger for sample demonstration
-                if (c.name.contains("রফিক")) {
-                    dao.insertCustomerLedger(
-                        CustomerLedger(
-                            customerId = custId,
-                            refType = "sale",
-                            refId = 1,
-                            debitPoisha = 145000, // 1450 Tk
-                            creditPoisha = 0,
-                            note = "আগের মাসের বাকি"
-                        )
-                    )
-                } else if (c.name.contains("করিম")) {
-                    dao.insertCustomerLedger(
-                        CustomerLedger(
-                            customerId = custId,
-                            refType = "sale",
-                            refId = 2,
-                            debitPoisha = 85000, // 850 Tk
-                            creditPoisha = 0,
-                            note = "মুদি বাকি"
-                        )
-                    )
-                }
-            }
-            for (s in SampleData.getSampleSuppliers()) {
-                dao.insertSupplier(s)
-            }
         }
     }
 
@@ -520,12 +539,19 @@ class PaponRepository(private val dao: PaponDao) {
         dao.clearPurchaseItems()
         dao.clearSuppliers()
         dao.clearStockAdjustments()
+        dao.clearDeletedRecords()
+
         // Ensure default grocery categories remain ready for real product additions
         if (dao.getCategoriesSync().isEmpty()) {
             dao.insertCategories(SampleData.getDefaultCategories())
         }
         if (dao.getExpenseCategoriesSync().isEmpty()) {
             dao.insertExpenseCategories(SampleData.getDefaultExpenseCategories())
+        }
+
+        // Also purge all dummy data from Supabase cloud database immediately
+        scope.launch {
+            supabaseSync.clearAllDataInSupabase()
         }
     }
 
@@ -541,29 +567,54 @@ class PaponRepository(private val dao: PaponDao) {
             if (beforeTimestamp != null) {
                 dao.clearSalesBefore(beforeTimestamp)
                 dao.cleanOrphanSaleItems()
+                scope.launch {
+                    supabaseSync.deleteFromSupabaseFilter("sales", "sale_date=lt.$beforeTimestamp")
+                }
             } else {
                 dao.clearSales()
                 dao.clearSaleItems()
+                scope.launch {
+                    supabaseSync.clearTableInSupabase("sale_items")
+                    supabaseSync.clearTableInSupabase("sales")
+                }
             }
         }
         if (clearProducts) {
             dao.clearProducts()
             dao.clearStockAdjustments()
+            scope.launch {
+                supabaseSync.clearTableInSupabase("products")
+                supabaseSync.clearTableInSupabase("stock_adjustments")
+            }
         }
         if (clearCustomers) {
             dao.clearCustomers()
             dao.clearCustomerLedger()
+            scope.launch {
+                supabaseSync.clearTableInSupabase("customer_ledger")
+                supabaseSync.clearTableInSupabase("customers")
+            }
         }
         if (clearExpenses) {
             if (beforeTimestamp != null) {
                 dao.clearExpensesBefore(beforeTimestamp)
+                scope.launch {
+                    supabaseSync.deleteFromSupabaseFilter("expenses", "expense_date=lt.$beforeTimestamp")
+                }
             } else {
                 dao.clearExpenses()
+                scope.launch {
+                    supabaseSync.clearTableInSupabase("expenses")
+                }
             }
         }
         if (clearPurchases) {
             dao.clearPurchases()
             dao.clearPurchaseItems()
+            scope.launch {
+                supabaseSync.clearTableInSupabase("purchase_items")
+                supabaseSync.clearTableInSupabase("purchases")
+            }
         }
     }
 

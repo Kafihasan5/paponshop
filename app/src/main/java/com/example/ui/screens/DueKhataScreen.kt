@@ -383,11 +383,54 @@ fun CustomerDetailBottomSheet(
             Divider()
             Spacer(modifier = Modifier.height(10.dp))
 
-            Text(
-                text = "লেনদেন খতিয়ান (লেজার)",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "লেনদেন খতিয়ান (লেজার)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                var showDeleteConfirm by remember { mutableStateOf(false) }
+
+                TextButton(
+                    onClick = { showDeleteConfirm = true },
+                    colors = ButtonDefaults.textButtonColors(contentColor = StatusDanger)
+                ) {
+                    Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("কাস্টমার মুছুন", fontSize = 12.sp)
+                }
+
+                if (showDeleteConfirm) {
+                    AlertDialog(
+                        onDismissRequest = { showDeleteConfirm = false },
+                        title = { Text("কাস্টমার মুছবেন?") },
+                        text = { Text("${customer.name}-এর সকল তথ্য ও বাকি খাতার রেকর্ড মুছে ফেলা হবে।") },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showDeleteConfirm = false
+                                    viewModel.deleteCustomer(customer.id) {
+                                        onDismiss()
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = StatusDanger)
+                            ) {
+                                Text("মুছুন")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDeleteConfirm = false }) {
+                                Text("বাতিল")
+                            }
+                        }
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 

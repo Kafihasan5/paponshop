@@ -244,5 +244,55 @@ interface PaponDao {
 
     @Query("SELECT * FROM expense_categories")
     suspend fun getExpenseCategoriesSync(): List<ExpenseCategory>
+
+    // Individual item deletions
+    @Query("DELETE FROM products WHERE id = :id")
+    suspend fun deleteProductById(id: Long)
+
+    @Query("DELETE FROM sales WHERE id = :id")
+    suspend fun deleteSaleById(id: Long)
+
+    @Query("DELETE FROM sale_items WHERE saleId = :saleId")
+    suspend fun deleteSaleItemsBySaleId(saleId: Long)
+
+    @Query("DELETE FROM customers WHERE id = :id")
+    suspend fun deleteCustomerById(id: Long)
+
+    @Query("DELETE FROM customer_ledger WHERE customerId = :customerId")
+    suspend fun deleteCustomerLedgerByCustomerId(customerId: Long)
+
+    @Query("DELETE FROM customer_ledger WHERE id = :id")
+    suspend fun deleteCustomerLedgerById(id: Long)
+
+    @Query("DELETE FROM expenses WHERE id = :id")
+    suspend fun deleteExpenseById(id: Long)
+
+    @Query("DELETE FROM suppliers WHERE id = :id")
+    suspend fun deleteSupplierById(id: Long)
+
+    @Query("DELETE FROM purchases WHERE id = :id")
+    suspend fun deletePurchaseById(id: Long)
+
+    @Query("DELETE FROM purchase_items WHERE purchaseId = :purchaseId")
+    suspend fun deletePurchaseItemsByPurchaseId(purchaseId: Long)
+
+    // Deleted records tracker for offline & cloud sync synchronization
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun recordDeletedItem(item: DeletedRecord)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun recordDeletedItems(items: List<DeletedRecord>)
+
+    @Query("SELECT recordId FROM deleted_records WHERE tableName = :tableName")
+    suspend fun getDeletedRecordIds(tableName: String): List<Long>
+
+    @Query("SELECT * FROM deleted_records")
+    suspend fun getAllDeletedRecords(): List<DeletedRecord>
+
+    @Query("DELETE FROM deleted_records WHERE tableName = :tableName AND recordId = :recordId")
+    suspend fun removeDeletedRecord(tableName: String, recordId: Long)
+
+    @Query("DELETE FROM deleted_records")
+    suspend fun clearDeletedRecords()
 }
 

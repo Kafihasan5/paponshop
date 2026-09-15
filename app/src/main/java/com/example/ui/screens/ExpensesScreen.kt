@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.entity.Expense
 import com.example.ui.PaponViewModel
 import com.example.ui.ShopConfig
+import com.example.ui.theme.StatusDanger
 import com.example.ui.theme.StatusWarning
 import com.example.util.Formatters
 
@@ -127,7 +128,11 @@ fun ExpensesScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(expenses, key = { it.id }) { exp ->
-                        ExpenseItemCard(expense = exp, config = config)
+                        ExpenseItemCard(
+                            expense = exp,
+                            config = config,
+                            onDelete = { viewModel.deleteExpense(exp.id) }
+                        )
                     }
                 }
             }
@@ -148,7 +153,13 @@ fun ExpensesScreen(
 }
 
 @Composable
-fun ExpenseItemCard(expense: Expense, config: ShopConfig) {
+fun ExpenseItemCard(
+    expense: Expense,
+    config: ShopConfig,
+    onDelete: () -> Unit
+) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -162,7 +173,7 @@ fun ExpenseItemCard(expense: Expense, config: ShopConfig) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(expense.categoryName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 if (!expense.note.isNullOrBlank()) {
                     Text(expense.note, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -174,12 +185,50 @@ fun ExpenseItemCard(expense: Expense, config: ShopConfig) {
                 )
             }
 
-            Text(
-                Formatters.formatMoney(expense.amountPoisha, config.useBengaliNumerals, config.currencySymbol),
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = StatusWarning
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    Formatters.formatMoney(expense.amountPoisha, config.useBengaliNumerals, config.currencySymbol),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = StatusWarning
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(
+                    onClick = { showDeleteConfirm = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        Icons.Default.DeleteOutline,
+                        contentDescription = "Delete Expense",
+                        tint = StatusDanger.copy(alpha = 0.8f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("খরচ মুছুন") },
+            text = { Text("এই খরচের রেকর্ডটি স্থায়ীভাবে মুছে ফেলতে চান?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusDanger)
+                ) {
+                    Text("মুছুন")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("বাতিল")
+                }
+            }
+        )
     }
 }
