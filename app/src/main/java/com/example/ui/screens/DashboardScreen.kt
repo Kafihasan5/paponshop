@@ -280,7 +280,7 @@ fun DashboardScreen(
                                     dashboardFilterMode = "yesterday"
                                     currentSalesPage = 1
                                 },
-                                label = { Text("কাল (${yesterdaySalesCount})", fontSize = 11.sp) },
+                                label = { Text("গতকাল (${yesterdaySalesCount})", fontSize = 11.sp) },
                                 modifier = Modifier.weight(1f)
                             )
 
@@ -681,7 +681,7 @@ fun DashboardScreen(
                             dashboardFilterMode = "yesterday"
                             currentSalesPage = 1
                         },
-                        label = { Text("কাল (${yesterdaySalesCount})", fontSize = 11.sp) }
+                        label = { Text("গতকাল (${yesterdaySalesCount})", fontSize = 11.sp) }
                     )
                     FilterChip(
                         selected = dashboardFilterMode == "custom",

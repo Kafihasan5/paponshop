@@ -78,7 +78,7 @@ fun ProductsScreen(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier
-                    .padding(bottom = 80.dp)
+                    .padding(bottom = 8.dp)
                     .testTag("add_product_fab")
             )
         }
