@@ -2,5 +2,5 @@
   "versionCode": 12,
   "versionName": "1.0.12",
   "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v12/app-debug.apk",
-  "releaseNotes": "Add complete Product Return system with auto stock restock, invoice item/amount deduction, customer due balance reversal, and return status badges"
+  "releaseNotes": "Add full product return system: restock inventory, deduct from invoice, adjust customer due balance, and update receipt/dashboard UI"
 }
