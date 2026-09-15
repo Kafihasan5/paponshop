@@ -1,6 +1,6 @@
 {
-  "versionCode": 10,
-  "versionName": "1.0.10",
-  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v10/app-debug.apk",
-  "releaseNotes": "Remove dummy data section, add password-protected wipe all data option, and fix day mode status bar"
+  "versionCode": 11,
+  "versionName": "1.0.11",
+  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v11/app-debug.apk",
+  "releaseNotes": "Digital PNG/JPEG Invoice & Voucher generation with WhatsApp sharing and Gallery save for cash sales, due sales, due statements, and payment receipts"
 }

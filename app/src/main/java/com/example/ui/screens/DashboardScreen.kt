@@ -38,6 +38,7 @@ import com.example.ui.theme.StatusDanger
 import com.example.ui.theme.StatusSuccess
 import com.example.ui.theme.StatusWarning
 import com.example.util.Formatters
+import com.example.util.InvoiceImageHelper
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1122,6 +1123,7 @@ fun DashboardSaleItemCard(
     onViewReceipt: () -> Unit,
     onDeleteSale: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -1292,6 +1294,26 @@ fun DashboardSaleItemCard(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Quick WhatsApp Invoice Image button
+                    IconButton(
+                        onClick = {
+                            val bmp = InvoiceImageHelper.generateSaleInvoiceBitmap(context, config, sale, items)
+                            val uri = InvoiceImageHelper.saveBitmapToCache(context, bmp, "invoice_${sale.invoiceNo}")
+                            val caption = InvoiceImageHelper.buildSaleInvoiceCaption(config, sale)
+                            InvoiceImageHelper.shareToWhatsApp(context, uri, sale.customerName, caption)
+                        },
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "WhatsApp ইনভয়েস ছবি",
+                            tint = Color(0xFF25D366),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
                     OutlinedButton(
                         onClick = onViewReceipt,
                         shape = RoundedCornerShape(8.dp),

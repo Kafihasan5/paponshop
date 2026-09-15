@@ -1,14 +1,19 @@
 package com.example.ui.screens
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -17,11 +22,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.entity.Customer
 import com.example.data.entity.CustomerLedger
 import com.example.ui.PaponViewModel
@@ -29,6 +37,7 @@ import com.example.ui.ShopConfig
 import com.example.ui.theme.StatusDanger
 import com.example.ui.theme.StatusSuccess
 import com.example.util.Formatters
+import com.example.util.InvoiceImageHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -280,6 +289,10 @@ fun CustomerDetailBottomSheet(
     val ledgerItems by viewModel.getCustomerLedgerFlow(customer.id).collectAsState(initial = emptyList())
 
     var showPaymentDialog by remember { mutableStateOf(false) }
+    var showPreviewDialog by remember { mutableStateOf(false) }
+    var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var previewCaption by remember { mutableStateOf("") }
+    var collectedReceiptInfo by remember { mutableStateOf<CollectedReceiptInfo?>(null) }
 
     fun sendWhatsAppReminder() {
         val msg = "শ্রদ্ধেয় ${customer.name},\n${config.shopName}-এ আপনার বকেয়া বাকি রয়েছে ${Formatters.formatMoney(balance, config.useBengaliNumerals, config.currencySymbol)}। অনুগ্রহ করে সুবিধাজনক সময়ে পরিশোধের অনুরোধ রইল।\n- ধন্যবাদ, ${config.shopName}"
@@ -290,6 +303,18 @@ fun CustomerDetailBottomSheet(
         } catch (e: Exception) {
             viewModel.showToast("WhatsApp অ্যাপ পাওয়া যায়নি")
         }
+    }
+
+    fun shareDueStatementImage() {
+        val bmp = InvoiceImageHelper.generateDueStatementBitmap(context, config, customer, ledgerItems, balance)
+        val uri = InvoiceImageHelper.saveBitmapToCache(context, bmp, "statement_${customer.name}")
+        val caption = InvoiceImageHelper.buildDueStatementCaption(config, customer, balance)
+        InvoiceImageHelper.shareToWhatsApp(context, uri, customer.phone, caption)
+    }
+
+    fun saveDueStatementImage() {
+        val bmp = InvoiceImageHelper.generateDueStatementBitmap(context, config, customer, ledgerItems, balance)
+        InvoiceImageHelper.saveBitmapToGallery(context, bmp, "statement_${customer.name}")
     }
 
     ModalBottomSheet(
@@ -379,6 +404,82 @@ fun CustomerDetailBottomSheet(
                 }
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Digital Due Statement Image Slip Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Image,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "বাকি খাতার স্লিপ ছবি (PNG)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        TextButton(
+                            onClick = {
+                                val bmp = InvoiceImageHelper.generateDueStatementBitmap(context, config, customer, ledgerItems, balance)
+                                previewBitmap = bmp
+                                previewCaption = InvoiceImageHelper.buildDueStatementCaption(config, customer, balance)
+                                showPreviewDialog = true
+                            },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("প্রিভিউ", fontSize = 11.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { shareDueStatementImage() },
+                            modifier = Modifier.weight(1.3f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("WhatsApp স্লিপ", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        OutlinedButton(
+                            onClick = { saveDueStatementImage() },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ছবি সেভ", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
             Divider()
             Spacer(modifier = Modifier.height(10.dp))
@@ -465,9 +566,45 @@ fun CustomerDetailBottomSheet(
             config = config,
             onDismiss = { showPaymentDialog = false },
             onConfirm = { amountPoisha, note ->
+                val prevDue = balance
+                val remDue = (balance - amountPoisha).coerceAtLeast(0L)
                 viewModel.collectDuePayment(customer.id, amountPoisha, note) {
                     showPaymentDialog = false
+                    collectedReceiptInfo = CollectedReceiptInfo(
+                        amountPoisha = amountPoisha,
+                        previousDuePoisha = prevDue,
+                        remainingDuePoisha = remDue,
+                        paymentMethod = "নগদ",
+                        note = note
+                    )
                 }
+            }
+        )
+    }
+
+    // Payment Collection Success Voucher Dialog
+    collectedReceiptInfo?.let { info ->
+        PaymentSuccessReceiptDialog(
+            customer = customer,
+            info = info,
+            config = config,
+            onDismiss = { collectedReceiptInfo = null }
+        )
+    }
+
+    // Due Statement Slip Preview Dialog
+    if (showPreviewDialog && previewBitmap != null) {
+        StatementPreviewDialog(
+            bitmap = previewBitmap!!,
+            title = "বাকি খাতার স্লিপ প্রিভিউ",
+            onDismiss = { showPreviewDialog = false },
+            onWhatsApp = {
+                val uri = InvoiceImageHelper.saveBitmapToCache(context, previewBitmap!!, "statement_${customer.name}")
+                InvoiceImageHelper.shareToWhatsApp(context, uri, customer.phone, previewCaption)
+                showPreviewDialog = false
+            },
+            onSave = {
+                InvoiceImageHelper.saveBitmapToGallery(context, previewBitmap!!, "statement_${customer.name}")
             }
         )
     }
@@ -657,4 +794,219 @@ fun AddCustomerDialog(
             TextButton(onClick = onDismiss) { Text("বাতিল") }
         }
     )
+}
+
+// Data class for collected payment receipt details
+data class CollectedReceiptInfo(
+    val amountPoisha: Long,
+    val previousDuePoisha: Long,
+    val remainingDuePoisha: Long,
+    val paymentMethod: String = "নগদ",
+    val note: String? = null
+)
+
+// Payment Success Voucher Dialog
+@Composable
+fun PaymentSuccessReceiptDialog(
+    customer: Customer,
+    info: CollectedReceiptInfo,
+    config: ShopConfig,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var showPreview by remember { mutableStateOf(false) }
+    var receiptBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    fun getOrGenBitmap(): Bitmap {
+        if (receiptBitmap != null && !receiptBitmap!!.isRecycled) return receiptBitmap!!
+        val bmp = InvoiceImageHelper.generatePaymentReceiptBitmap(
+            context = context,
+            config = config,
+            customer = customer,
+            amountPoisha = info.amountPoisha,
+            previousDuePoisha = info.previousDuePoisha,
+            remainingDuePoisha = info.remainingDuePoisha,
+            paymentMethod = info.paymentMethod,
+            note = info.note
+        )
+        receiptBitmap = bmp
+        return bmp
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.CheckCircle,
+                contentDescription = null,
+                tint = StatusSuccess,
+                modifier = Modifier.size(36.dp)
+            )
+        },
+        title = {
+            Text("টাকা জমা সফল হয়েছে!", fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("সম্মানিত ক্রেতা: ${customer.name}", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "আদায়কৃত টাকা: ${Formatters.formatMoney(info.amountPoisha, config.useBengaliNumerals, config.currencySymbol)}",
+                    fontWeight = FontWeight.Bold,
+                    color = StatusSuccess,
+                    fontSize = 16.sp
+                )
+                Text(
+                    "অবশিষ্ট বকেয়া: ${Formatters.formatMoney(info.remainingDuePoisha, config.useBengaliNumerals, config.currencySymbol)}",
+                    color = if (info.remainingDuePoisha > 0) StatusDanger else StatusSuccess
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Divider()
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    "ক্রেতাকে ডিজিটাল টাকা জমার ভাউচার ছবি পাঠাবেন?",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            val bmp = getOrGenBitmap()
+                            val uri = InvoiceImageHelper.saveBitmapToCache(context, bmp, "receipt_${customer.name}")
+                            val caption = InvoiceImageHelper.buildPaymentReceiptCaption(
+                                config = config,
+                                customer = customer,
+                                amountPoisha = info.amountPoisha,
+                                previousDuePoisha = info.previousDuePoisha,
+                                remainingDuePoisha = info.remainingDuePoisha
+                            )
+                            InvoiceImageHelper.shareToWhatsApp(context, uri, customer.phone, caption)
+                            onDismiss()
+                        },
+                        modifier = Modifier.weight(1.2f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("WhatsApp", color = Color.White, fontSize = 12.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            val bmp = getOrGenBitmap()
+                            InvoiceImageHelper.saveBitmapToGallery(context, bmp, "receipt_${customer.name}")
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("ছবি সেভ", fontSize = 12.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("সম্পন্ন")
+            }
+        }
+    )
+}
+
+// Statement Preview Dialog
+@Composable
+fun StatementPreviewDialog(
+    bitmap: Bitmap,
+    title: String = "ছবি প্রিভিউ",
+    onDismiss: () -> Unit,
+    onWhatsApp: () -> Unit,
+    onSave: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.85f),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "বন্ধ")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.White)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "স্লিপ ছবি",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onWhatsApp,
+                        modifier = Modifier.weight(1.3f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("হোয়াটসঅ্যাপ", color = Color.White)
+                    }
+
+                    Button(
+                        onClick = onSave,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("সেভ করুন")
+                    }
+                }
+            }
+        }
+    }
 }
