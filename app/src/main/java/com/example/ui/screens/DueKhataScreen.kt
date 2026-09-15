@@ -1,0 +1,617 @@
+package com.example.ui.screens
+
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.data.entity.Customer
+import com.example.data.entity.CustomerLedger
+import com.example.ui.PaponViewModel
+import com.example.ui.ShopConfig
+import com.example.ui.theme.StatusDanger
+import com.example.ui.theme.StatusSuccess
+import com.example.util.Formatters
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DueKhataScreen(
+    viewModel: PaponViewModel,
+    config: ShopConfig,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val customers by viewModel.customers.collectAsState()
+    val totalDue by viewModel.totalDue.collectAsState()
+
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCustomerForDetail by remember { mutableStateOf<Customer?>(null) }
+    var showAddCustomerDialog by remember { mutableStateOf(false) }
+
+    val filteredCustomers = remember(customers, searchQuery) {
+        customers.filter {
+            searchQuery.isBlank() ||
+                    it.name.contains(searchQuery, ignoreCase = true) ||
+                    it.phone.contains(searchQuery)
+        }
+    }
+
+    Scaffold(
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { showAddCustomerDialog = true },
+                icon = { Icon(Icons.Default.PersonAdd, contentDescription = null) },
+                text = { Text("নতুন কাস্টমার") },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier
+                    .padding(bottom = 80.dp)
+                    .testTag("add_customer_fab")
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            // Header & Total Due Banner
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 2.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "বাকি খাতা (কাস্টমার লেজার)",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = StatusDanger.copy(alpha = 0.09f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "দোকানের মোট বাকি পাওনা",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = Formatters.formatMoney(totalDue, config.useBengaliNumerals, config.currencySymbol),
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = StatusDanger
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(StatusDanger.copy(alpha = 0.16f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.MenuBook, contentDescription = null, tint = StatusDanger)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("কাস্টমারের নাম বা মোবাইল দিয়ে খুঁজুন...") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            // Customer List
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 140.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(filteredCustomers, key = { it.id }) { customer ->
+                    CustomerDueItemCard(
+                        customer = customer,
+                        viewModel = viewModel,
+                        config = config,
+                        onClick = { selectedCustomerForDetail = customer }
+                    )
+                }
+            }
+        }
+    }
+
+    // Customer Detail Bottom Sheet
+    selectedCustomerForDetail?.let { customer ->
+        CustomerDetailBottomSheet(
+            customer = customer,
+            viewModel = viewModel,
+            config = config,
+            onDismiss = { selectedCustomerForDetail = null }
+        )
+    }
+
+    // Add Customer Dialog
+    if (showAddCustomerDialog) {
+        AddCustomerDialog(
+            onDismiss = { showAddCustomerDialog = false },
+            onSave = { newCust ->
+                viewModel.saveCustomer(newCust) {
+                    showAddCustomerDialog = false
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun CustomerDueItemCard(
+    customer: Customer,
+    viewModel: PaponViewModel,
+    config: ShopConfig,
+    onClick: () -> Unit
+) {
+    val balance by viewModel.getCustomerBalanceFlow(customer.id).collectAsState(initial = 0L)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .testTag("customer_card_${customer.id}"),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = customer.name.take(1),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column {
+                    Text(
+                        text = customer.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = customer.phone,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (!customer.address.isNullOrBlank()) {
+                        Text(
+                            text = customer.address,
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "বাকি:",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = Formatters.formatMoney(balance, config.useBengaliNumerals, config.currencySymbol),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (balance > 0) StatusDanger else StatusSuccess
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CustomerDetailBottomSheet(
+    customer: Customer,
+    viewModel: PaponViewModel,
+    config: ShopConfig,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val balance by viewModel.getCustomerBalanceFlow(customer.id).collectAsState(initial = 0L)
+    val ledgerItems by viewModel.getCustomerLedgerFlow(customer.id).collectAsState(initial = emptyList())
+
+    var showPaymentDialog by remember { mutableStateOf(false) }
+
+    fun sendWhatsAppReminder() {
+        val msg = "শ্রদ্ধেয় ${customer.name},\n${config.shopName}-এ আপনার বকেয়া বাকি রয়েছে ${Formatters.formatMoney(balance, config.useBengaliNumerals, config.currencySymbol)}। অনুগ্রহ করে সুবিধাজনক সময়ে পরিশোধের অনুরোধ রইল।\n- ধন্যবাদ, ${config.shopName}"
+        val uri = Uri.parse("https://api.whatsapp.com/send?phone=+88${customer.phone}&text=${Uri.encode(msg)}")
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+        try {
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            viewModel.showToast("WhatsApp অ্যাপ পাওয়া যায়নি")
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 36.dp)
+        ) {
+            // Customer Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = customer.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "মোবাইল: ${customer.phone}",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(StatusDanger.copy(alpha = 0.12f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("মোট বাকি", fontSize = 11.sp, color = StatusDanger)
+                        Text(
+                            text = Formatters.formatMoney(balance, config.useBengaliNumerals, config.currencySymbol),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = StatusDanger
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Action Buttons: বাকি আদায়, WhatsApp তাগাদা, সরাসরি কল
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { showPaymentDialog = true },
+                    modifier = Modifier.weight(1.2f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Default.Payments, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("বাকি আদায়")
+                }
+
+                Button(
+                    onClick = { sendWhatsAppReminder() },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366))
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("তাগাদা", color = Color.White)
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        val callIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${customer.phone}"))
+                        context.startActivity(callIntent)
+                    },
+                    modifier = Modifier.weight(0.8f)
+                ) {
+                    Icon(Icons.Default.Call, contentDescription = "Call", modifier = Modifier.size(18.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Divider()
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "লেনদেন খতিয়ান (লেজার)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (ledgerItems.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("কোনো লেনদেন রেকর্ড নেই", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 280.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(ledgerItems) { item ->
+                        LedgerItemRow(item = item, config = config)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showPaymentDialog) {
+        DueCollectionDialog(
+            customerName = customer.name,
+            currentDue = balance,
+            config = config,
+            onDismiss = { showPaymentDialog = false },
+            onConfirm = { amountPoisha, note ->
+                viewModel.collectDuePayment(customer.id, amountPoisha, note) {
+                    showPaymentDialog = false
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun LedgerItemRow(item: CustomerLedger, config: ShopConfig) {
+    val isPayment = item.creditPoisha > 0
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = if (isPayment) "জমা / আদায়" else "বাকি ক্রয়",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = if (isPayment) StatusSuccess else StatusDanger
+                )
+                Text(
+                    text = item.note ?: Formatters.formatDateTime(item.entryDate, config.useBengaliNumerals),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Text(
+                text = if (isPayment)
+                    "+${Formatters.formatMoney(item.creditPoisha, config.useBengaliNumerals, config.currencySymbol)}"
+                else
+                    "-${Formatters.formatMoney(item.debitPoisha, config.useBengaliNumerals, config.currencySymbol)}",
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = if (isPayment) StatusSuccess else StatusDanger
+            )
+        }
+    }
+}
+
+// Due Collection Dialog
+@Composable
+fun DueCollectionDialog(
+    customerName: String,
+    currentDue: Long,
+    config: ShopConfig,
+    onDismiss: () -> Unit,
+    onConfirm: (Long, String?) -> Unit
+) {
+    var amountText by remember { mutableStateOf(if (currentDue > 0) (currentDue / 100).toString() else "") }
+    var note by remember { mutableStateOf("নগদে বাকি আদায়") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("বাকি আদায়: $customerName") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "বর্তমান বাকি: ${Formatters.formatMoney(currentDue, config.useBengaliNumerals, config.currencySymbol)}",
+                    fontWeight = FontWeight.SemiBold,
+                    color = StatusDanger
+                )
+
+                OutlinedTextField(
+                    value = amountText,
+                    onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("আদায়কৃত টাকা (৳)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Quick amount chips
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(500L, 1000L, currentDue / 100).distinct().forEach { amt ->
+                        AssistChip(
+                            onClick = { amountText = amt.toString() },
+                            label = { Text("৳$amt", fontSize = 11.sp) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text("বিবরণ / নোট") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val a = amountText.toDoubleOrNull() ?: 0.0
+                    if (a > 0) {
+                        onConfirm((a * 100).toLong(), note.ifBlank { null })
+                    }
+                },
+                enabled = (amountText.toDoubleOrNull() ?: 0.0) > 0
+            ) {
+                Text("আদায় নিশ্চিত করুন")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("বাতিল") }
+        }
+    )
+}
+
+// Add Customer Dialog
+@Composable
+fun AddCustomerDialog(
+    onDismiss: () -> Unit,
+    onSave: (Customer) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var creditLimitText by remember { mutableStateOf("5000") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("নতুন কাস্টমার যোগ") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("কাস্টমারের নাম *") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { phone = it },
+                    label = { Text("মোবাইল নম্বর *") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = address,
+                    onValueChange = { address = it },
+                    label = { Text("ঠিকানা (ঐচ্ছিক)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = creditLimitText,
+                    onValueChange = { creditLimitText = it.filter { c -> c.isDigit() } },
+                    label = { Text("সর্বোচ্চ বাকি লিমিট (৳)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.isNotBlank() && phone.isNotBlank()) {
+                        val limitPoisha = ((creditLimitText.toLongOrNull() ?: 5000L) * 100)
+                        onSave(
+                            Customer(
+                                name = name.trim(),
+                                phone = phone.trim(),
+                                address = address.trim().ifBlank { null },
+                                creditLimitPoisha = limitPoisha
+                            )
+                        )
+                    }
+                },
+                enabled = name.isNotBlank() && phone.isNotBlank()
+            ) {
+                Text("সংরক্ষণ করুন")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("বাতিল") }
+        }
+    )
+}
