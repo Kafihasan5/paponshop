@@ -767,6 +767,8 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+
     if (showInAppSettingsUpdateDialog && appUpdateInfo.isUpdateAvailable) {
         UpdateDialog(
             updateInfo = com.example.util.AppUpdateInfo(
