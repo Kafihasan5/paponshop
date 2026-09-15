@@ -1,6 +1,6 @@
 {
-  "versionCode": 8,
-  "versionName": "1.0.8",
-  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v8/app-debug.apk",
-  "releaseNotes": "Remove publisher button from Settings and dummy buttons from Products page"
+  "versionCode": 9,
+  "versionName": "1.0.9",
+  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v9/app-debug.apk",
+  "releaseNotes": "Add options to add, edit, and remove categories and units"
 }
