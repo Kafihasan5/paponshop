@@ -26,6 +26,7 @@ import com.example.data.entity.Category
 import com.example.data.entity.Product
 import com.example.ui.PaponViewModel
 import com.example.ui.ShopConfig
+import com.example.ui.components.CategoryUnitManagerDialog
 import com.example.ui.theme.StatusDanger
 import com.example.ui.theme.StatusSuccess
 import com.example.ui.theme.StatusWarning
@@ -40,6 +41,7 @@ fun ProductsScreen(
 ) {
     val products by viewModel.products.collectAsState()
     val categories by viewModel.categories.collectAsState()
+    val units by viewModel.units.collectAsState()
     val totalStockSaleValue by viewModel.totalStockSaleValuePoisha.collectAsState()
     val totalStockPurchaseValue by viewModel.totalStockPurchaseValuePoisha.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
@@ -51,6 +53,8 @@ fun ProductsScreen(
     var productToEdit by remember { mutableStateOf<Product?>(null) }
     var isAddingNew by remember { mutableStateOf(false) }
     var productForStockAdjust by remember { mutableStateOf<Product?>(null) }
+    var showCategoryUnitManager by remember { mutableStateOf(false) }
+    var initialManageTab by remember { mutableStateOf(0) }
 
     val filteredProducts = remember(products, searchQuery, selectedCatId, showOnlyLowStock) {
 
@@ -228,6 +232,19 @@ fun ProductsScreen(
                                     label = { Text(cat.nameBn, fontSize = 12.sp) }
                                 )
                             }
+                            item {
+                                AssistChip(
+                                    onClick = {
+                                        initialManageTab = 0
+                                        showCategoryUnitManager = true
+                                    },
+                                    label = { Text("⚙️ ক্যাটাগরি ও একক", fontSize = 12.sp) },
+                                    colors = AssistChipDefaults.assistChipColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                        labelColor = MaterialTheme.colorScheme.primary
+                                    )
+                                )
+                            }
                         }
                     }
                 }
@@ -328,6 +345,7 @@ fun ProductsScreen(
         ProductFormDialog(
             initialProduct = productToEdit,
             categories = categories,
+            units = units,
             onDismiss = {
                 isAddingNew = false
                 productToEdit = null
@@ -337,6 +355,14 @@ fun ProductsScreen(
                     isAddingNew = false
                     productToEdit = null
                 }
+            },
+            onManageCategories = {
+                initialManageTab = 0
+                showCategoryUnitManager = true
+            },
+            onManageUnits = {
+                initialManageTab = 1
+                showCategoryUnitManager = true
             }
         )
     }
@@ -351,6 +377,14 @@ fun ProductsScreen(
                 viewModel.adjustStock(product.id, product.nameBn, qtyChange, reason, note)
                 productForStockAdjust = null
             }
+        )
+    }
+
+    if (showCategoryUnitManager) {
+        CategoryUnitManagerDialog(
+            viewModel = viewModel,
+            initialTab = initialManageTab,
+            onDismiss = { showCategoryUnitManager = false }
         )
     }
 }
@@ -465,20 +499,21 @@ fun ProductManagementCard(
 fun ProductFormDialog(
     initialProduct: Product?,
     categories: List<Category>,
+    units: List<String>,
     onDismiss: () -> Unit,
-    onSave: (Product) -> Unit
+    onSave: (Product) -> Unit,
+    onManageCategories: () -> Unit,
+    onManageUnits: () -> Unit
 ) {
     var nameBn by remember { mutableStateOf(initialProduct?.nameBn ?: "") }
     var nameEn by remember { mutableStateOf(initialProduct?.nameEn ?: "") }
-    var selectedCatId by remember { mutableStateOf(initialProduct?.categoryId ?: 2L) }
-    var unitName by remember { mutableStateOf(initialProduct?.unitName ?: "কেজি") }
+    var selectedCatId by remember { mutableStateOf(initialProduct?.categoryId ?: (categories.firstOrNull { it.id != 1L }?.id ?: 2L)) }
+    var unitName by remember { mutableStateOf(initialProduct?.unitName ?: (units.firstOrNull() ?: "কেজি")) }
     var purchasePrice by remember { mutableStateOf(if (initialProduct != null) (initialProduct.purchasePricePoisha / 100.0).toString() else "") }
     var salePrice by remember { mutableStateOf(if (initialProduct != null) (initialProduct.salePricePoisha / 100.0).toString() else "") }
     var stockQty by remember { mutableStateOf(initialProduct?.stockQty?.toString() ?: "0") }
     var minStock by remember { mutableStateOf(initialProduct?.minStock?.toString() ?: "5") }
     var barcode by remember { mutableStateOf(initialProduct?.barcode ?: "") }
-
-    val standardUnits = listOf("কেজি", "গ্রাম", "লিটার", "পিস", "প্যাকেট", "হালি", "ডজন", "বস্তা")
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -509,7 +544,21 @@ fun ProductFormDialog(
                 }
 
                 item {
-                    Text("ক্যাটাগরি নির্বাচন:", style = MaterialTheme.typography.bodySmall)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("ক্যাটাগরি নির্বাচন:", style = MaterialTheme.typography.bodySmall)
+                        TextButton(
+                            onClick = onManageCategories,
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("ম্যানেজ/যোগ", fontSize = 11.sp)
+                        }
+                    }
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(categories.filter { it.id != 1L }) { cat ->
                             FilterChip(
@@ -522,9 +571,23 @@ fun ProductFormDialog(
                 }
 
                 item {
-                    Text("একক নির্বাচন:", style = MaterialTheme.typography.bodySmall)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("একক নির্বাচন:", style = MaterialTheme.typography.bodySmall)
+                        TextButton(
+                            onClick = onManageUnits,
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("ম্যানেজ/যোগ", fontSize = 11.sp)
+                        }
+                    }
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(standardUnits) { u ->
+                        items(units) { u ->
                             FilterChip(
                                 selected = unitName == u,
                                 onClick = { unitName = u },

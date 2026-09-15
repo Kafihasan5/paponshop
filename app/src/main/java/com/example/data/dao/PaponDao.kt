@@ -49,6 +49,21 @@ interface PaponDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCategories(categories: List<Category>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCategory(category: Category): Long
+
+    @Update
+    suspend fun updateCategory(category: Category)
+
+    @Query("DELETE FROM categories WHERE id = :categoryId")
+    suspend fun deleteCategoryById(categoryId: Long)
+
+    @Query("UPDATE products SET categoryId = :newCatId WHERE categoryId = :oldCatId")
+    suspend fun reassignProductsCategory(oldCatId: Long, newCatId: Long)
+
+    @Query("UPDATE products SET unitName = :newUnit WHERE unitName = :oldUnit")
+    suspend fun updateProductUnitName(oldUnit: String, newUnit: String)
+
     // --- SALES & SALE ITEMS ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSale(sale: Sale): Long

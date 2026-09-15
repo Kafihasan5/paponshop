@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import java.util.Calendar
+import org.json.JSONArray
 
 data class CartItem(
     val productId: Long, // 0 for custom quick item
@@ -89,8 +90,13 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
     private val _appUpdateInfo = MutableStateFlow(AppUpdateInfo())
     val appUpdateInfo: StateFlow<AppUpdateInfo> = _appUpdateInfo.asStateFlow()
 
+    private val defaultUnits = listOf("কেজি", "গ্রাম", "লিটার", "মিলি", "পিস", "প্যাকেট", "হালি", "ডজন", "বস্তা", "বক্স", "কার্টুন", "মিটার", "বোতল")
+    private val _units = MutableStateFlow<List<String>>(defaultUnits)
+    val units: StateFlow<List<String>> = _units.asStateFlow()
+
     init {
         loadShopConfig()
+        loadUnits()
         val db = PaponDatabase.getInstance(application)
         repository = PaponRepository(db.paponDao())
         
@@ -865,6 +871,116 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
                 apply()
             }
         } catch (_: Exception) {}
+    }
+
+    private fun loadUnits() {
+        try {
+            val saved = prefs.getString("custom_units_json", null)
+            if (!saved.isNullOrBlank()) {
+                val array = JSONArray(saved)
+                val list = mutableListOf<String>()
+                for (i in 0 until array.length()) {
+                    val u = array.getString(i).trim()
+                    if (u.isNotEmpty()) list.add(u)
+                }
+                if (list.isNotEmpty()) {
+                    _units.value = list
+                    return
+                }
+            }
+        } catch (_: Exception) {}
+        _units.value = defaultUnits
+    }
+
+    private fun saveUnits(list: List<String>) {
+        try {
+            val array = JSONArray()
+            list.forEach { array.put(it) }
+            prefs.edit().putString("custom_units_json", array.toString()).apply()
+        } catch (_: Exception) {}
+    }
+
+    fun addCategory(
+        nameBn: String,
+        nameEn: String = "",
+        iconName: String = "shopping_basket",
+        onComplete: (() -> Unit)? = null
+    ) {
+        val cleanBn = nameBn.trim()
+        if (cleanBn.isBlank()) return
+        viewModelScope.launch {
+            val maxOrder = categories.value.maxOfOrNull { it.sortOrder } ?: 0
+            val cat = Category(
+                nameBn = cleanBn,
+                nameEn = nameEn.trim(),
+                iconName = iconName,
+                sortOrder = maxOrder + 1
+            )
+            repository.saveCategory(cat)
+            onComplete?.invoke()
+        }
+    }
+
+    fun updateCategory(category: Category, onComplete: (() -> Unit)? = null) {
+        if (category.nameBn.isBlank() || category.id == 1L) return
+        viewModelScope.launch {
+            repository.saveCategory(category)
+            onComplete?.invoke()
+        }
+    }
+
+    fun deleteCategory(categoryId: Long, onComplete: (() -> Unit)? = null) {
+        if (categoryId == 1L) return
+        viewModelScope.launch {
+            repository.deleteCategory(categoryId)
+            if (_selectedCategoryId.value == categoryId) {
+                _selectedCategoryId.value = 1L
+            }
+            onComplete?.invoke()
+        }
+    }
+
+    fun addUnit(unit: String, onComplete: (() -> Unit)? = null) {
+        val clean = unit.trim()
+        if (clean.isBlank()) return
+        val current = _units.value.toMutableList()
+        if (!current.contains(clean)) {
+            current.add(clean)
+            _units.value = current
+            saveUnits(current)
+        }
+        onComplete?.invoke()
+    }
+
+    fun updateUnit(oldUnit: String, newUnit: String, onComplete: (() -> Unit)? = null) {
+        val clean = newUnit.trim()
+        if (clean.isBlank() || clean == oldUnit) return
+        val current = _units.value.toMutableList()
+        val index = current.indexOf(oldUnit)
+        if (index >= 0) {
+            current[index] = clean
+            _units.value = current
+            saveUnits(current)
+            viewModelScope.launch {
+                repository.updateProductUnit(oldUnit, clean)
+                onComplete?.invoke()
+            }
+        }
+    }
+
+    fun deleteUnit(unit: String, onComplete: (() -> Unit)? = null) {
+        val current = _units.value.toMutableList()
+        if (current.remove(unit)) {
+            _units.value = current
+            saveUnits(current)
+        }
+        onComplete?.invoke()
+    }
+
+    fun resetDefaultUnits(onComplete: (() -> Unit)? = null) {
+        _units.value = defaultUnits
+        saveUnits(defaultUnits)
+        onComplete?.invoke()
     }
 
     fun verifyPin(pin: String): Boolean {

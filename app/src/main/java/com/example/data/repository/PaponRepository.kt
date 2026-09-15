@@ -25,6 +25,26 @@ class PaponRepository(private val dao: PaponDao) {
     val lowStockProducts: Flow<List<Product>> = dao.getLowStockProducts()
     val allCategories: Flow<List<Category>> = dao.getAllCategories()
 
+    suspend fun saveCategory(category: Category): Long = withContext(Dispatchers.IO) {
+        if (category.id == 0L) {
+            dao.insertCategory(category)
+        } else {
+            dao.updateCategory(category)
+            category.id
+        }
+    }
+
+    suspend fun deleteCategory(categoryId: Long) = withContext(Dispatchers.IO) {
+        val all = dao.getCategoriesSync().filter { it.id != categoryId && it.id != 1L }
+        val fallbackId = all.firstOrNull()?.id ?: 2L
+        dao.reassignProductsCategory(categoryId, fallbackId)
+        dao.deleteCategoryById(categoryId)
+    }
+
+    suspend fun updateProductUnit(oldUnit: String, newUnit: String) = withContext(Dispatchers.IO) {
+        dao.updateProductUnitName(oldUnit, newUnit)
+    }
+
     suspend fun getProductById(id: Long): Product? = dao.getProductById(id)
     suspend fun getProductByBarcode(barcode: String): Product? = dao.getProductByBarcode(barcode)
     suspend fun saveProduct(product: Product): Long {

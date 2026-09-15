@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.PaponViewModel
 import com.example.ui.ShopConfig
 import com.example.ui.components.UpdateDialog
+import com.example.ui.components.CategoryUnitManagerDialog
 import com.example.ui.theme.StatusDanger
 import com.example.ui.theme.StatusSuccess
 
@@ -47,10 +48,14 @@ fun SettingsScreen(
     var showClearDummyDialog by remember { mutableStateOf(false) }
     var showResetSampleDialog by remember { mutableStateOf(false) }
     var showInAppSettingsUpdateDialog by remember { mutableStateOf(false) }
+    var showCategoryUnitManager by remember { mutableStateOf(false) }
+    var initialManageTab by remember { mutableStateOf(0) }
 
     val isSyncing by viewModel.isSyncing.collectAsState()
     val lastSyncTime by viewModel.lastSyncTime.collectAsState()
     val appUpdateInfo by viewModel.appUpdateInfo.collectAsState()
+    val categories by viewModel.categories.collectAsState()
+    val units by viewModel.units.collectAsState()
 
 
     Scaffold(
@@ -254,6 +259,82 @@ fun SettingsScreen(
                                 checked = allowNegativeStock,
                                 onCheckedChange = { allowNegativeStock = it }
                             )
+                        }
+                    }
+                }
+            }
+
+            // Section: Category & Measurement Unit Management
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Category,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("ক্যাটাগরি ও পরিমাপের একক ব্যবস্থাপনা", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+
+                        Text(
+                            text = "পণ্যের ক্যাটাগরি এবং বিক্রয় ও ক্রয়ের পরিমাপের একক (যেমন: কেজি, পিস, লিটার, বস্তা) নতুন যোগ, নাম পরিবর্তন বা মুছে ফেলার নিয়ন্ত্রণ।",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    initialManageTab = 0
+                                    showCategoryUnitManager = true
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Category, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("ক্যাটাগরি (${categories.size})", fontSize = 13.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    initialManageTab = 1
+                                    showCategoryUnitManager = true
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Scale, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("এককসমূহ (${units.size})", fontSize = 13.sp)
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                initialManageTab = 0
+                                showCategoryUnitManager = true
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("ক্যাটাগরি ও একক পরিচালনা করুন", fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -672,6 +753,14 @@ fun SettingsScreen(
                 releaseNotes = appUpdateInfo.updateNotes
             ),
             onDismiss = { showInAppSettingsUpdateDialog = false }
+        )
+    }
+
+    if (showCategoryUnitManager) {
+        CategoryUnitManagerDialog(
+            viewModel = viewModel,
+            initialTab = initialManageTab,
+            onDismiss = { showCategoryUnitManager = false }
         )
     }
 }
