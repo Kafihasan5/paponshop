@@ -345,12 +345,14 @@ fun DashboardScreen(
                         modifier = Modifier.weight(1f)
                     )
 
+                    val periodSurplusPoisha = periodGrossProfitPoisha - periodExpenseTotalPoisha
+                    val surplusPrefix = if (periodSurplusPoisha < 0) "-" else ""
                     SummaryCard(
-                        title = "$periodLabel নিট লাভ",
-                        amount = Formatters.formatMoney(periodNetProfitPoisha, config.useBengaliNumerals, config.currencySymbol),
-                        subtitle = if (periodNetProfitPoisha >= 0) "মোট লাভ" else "ক্ষতি",
+                        title = "$periodLabel পণ্যের লাভ",
+                        amount = Formatters.formatMoney(periodGrossProfitPoisha, config.useBengaliNumerals, config.currencySymbol),
+                        subtitle = "(দোকান খরচ বাদে চূড়ান্ত উদ্বৃত্ত: $surplusPrefix${Formatters.formatMoney(kotlin.math.abs(periodSurplusPoisha), config.useBengaliNumerals, config.currencySymbol)})",
                         icon = Icons.Default.TrendingUp,
-                        iconColor = if (periodNetProfitPoisha >= 0) StatusSuccess else StatusDanger,
+                        iconColor = if (periodGrossProfitPoisha >= 0) StatusSuccess else StatusDanger,
                         bgColor = MaterialTheme.colorScheme.surface,
                         modifier = Modifier.weight(1f)
                     )

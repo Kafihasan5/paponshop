@@ -48,6 +48,8 @@ fun SettingsScreen(
     var pinCode by remember { mutableStateOf(config.pinCode) }
     var userRole by remember { mutableStateOf(config.userRole) } // "owner" or "staff"
     var allowNegativeStock by remember { mutableStateOf(config.allowNegativeStock) }
+    var deviceName by remember { mutableStateOf(config.deviceName) }
+    var devicePrefix by remember { mutableStateOf(config.devicePrefix) }
     var showWipeAllDataDialog by remember { mutableStateOf(false) }
     var showInAppSettingsUpdateDialog by remember { mutableStateOf(false) }
     var showCategoryUnitManager by remember { mutableStateOf(false) }
@@ -93,7 +95,9 @@ fun SettingsScreen(
                                 pinEnabled = pinEnabled,
                                 pinCode = pinCode.trim(),
                                 userRole = userRole,
-                                allowNegativeStock = allowNegativeStock
+                                allowNegativeStock = allowNegativeStock,
+                                deviceName = deviceName.trim().ifBlank { "কাউন্টার ১" },
+                                devicePrefix = devicePrefix.trim().ifBlank { "A" }
                             )
                             viewModel.updateShopConfig(updated)
                             onBack()
@@ -162,6 +166,47 @@ fun SettingsScreen(
                             value = tagline,
                             onValueChange = { tagline = it },
                             label = { Text("স্লোগান / ট্যাগলাইন") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
+            // Section 1.5: Multi-Device / Counter Identification
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("ডিভাইস ও কাউন্টার পরিচিতি (একাধিক ফোনে ব্যবহারে)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(
+                            "একাধিক ফোনে অ্যাপটি চালালে প্রতি ফোনে আলাদা নাম ও প্রিফিক্স দিন। এতে কারও মেমো বা হিসাব অন্যের সাথে মিশে যাবে না।",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        OutlinedTextField(
+                            value = deviceName,
+                            onValueChange = { deviceName = it },
+                            label = { Text("কাউন্টার বা ডিভাইসের নাম (যেমন: কাউন্টার ১, মালিক, কর্মচারী)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = devicePrefix,
+                            onValueChange = { 
+                                if (it.length <= 4) devicePrefix = it.filter { c -> c.isLetterOrDigit() }
+                            },
+                            label = { Text("মেমো প্রিফিক্স কোড (যেমন: A, B, ১, ২)") },
+                            supportingText = { Text("মেমো নম্বরে যুক্ত হবে (যেমন: INV-$devicePrefix-123456)") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )

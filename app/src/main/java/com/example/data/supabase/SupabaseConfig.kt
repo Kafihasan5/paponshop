@@ -10,7 +10,7 @@ object SupabaseConfig {
     val url: String
         get() = try {
             val configUrl = BuildConfig.SUPABASE_URL
-            if (!configUrl.isNullOrBlank()) configUrl else DEFAULT_URL
+            if (!configUrl.isNullOrBlank() && !configUrl.contains("your_supabase")) configUrl else DEFAULT_URL
         } catch (_: Throwable) {
             DEFAULT_URL
         }
@@ -18,7 +18,7 @@ object SupabaseConfig {
     val anonKey: String
         get() = try {
             val key = BuildConfig.SUPABASE_ANON_KEY
-            if (!key.isNullOrBlank()) key else DEFAULT_ANON_KEY
+            if (!key.isNullOrBlank() && !key.contains("your_supabase") && !key.contains("placeholder")) key else DEFAULT_ANON_KEY
         } catch (_: Throwable) {
             DEFAULT_ANON_KEY
         }

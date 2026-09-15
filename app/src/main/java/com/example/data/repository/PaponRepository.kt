@@ -48,11 +48,13 @@ class PaponRepository(private val dao: PaponDao) {
     suspend fun getProductById(id: Long): Product? = dao.getProductById(id)
     suspend fun getProductByBarcode(barcode: String): Product? = dao.getProductByBarcode(barcode)
     suspend fun saveProduct(product: Product): Long {
-        val id = dao.insertProduct(product)
-        val saved = product.copy(id = id)
-        dao.removeDeletedRecord("products", id)
+        val target = if (product.id > 0) product else product.copy(id = com.example.util.IdGenerator.nextId())
+        val id = dao.insertProduct(target)
+        val finalId = if (target.id > 0) target.id else id
+        val saved = target.copy(id = finalId)
+        dao.removeDeletedRecord("products", finalId)
         scope.launch { supabaseSync.syncProduct(saved) }
-        return id
+        return finalId
     }
     suspend fun updateProduct(product: Product) {
         dao.updateProduct(product)
@@ -99,8 +101,13 @@ class PaponRepository(private val dao: PaponDao) {
         items: List<SaleItem>,
         updateStock: Boolean = true
     ): Long = withContext(Dispatchers.IO) {
-        val saleId = dao.insertSale(sale)
-        val preparedItems = items.map { it.copy(saleId = saleId) }
+        val targetSale = if (sale.id > 0) sale else sale.copy(id = com.example.util.IdGenerator.nextId())
+        val saleId = dao.insertSale(targetSale)
+        val finalSaleId = if (targetSale.id > 0) targetSale.id else saleId
+        val preparedItems = items.map {
+            val itemId = if (it.id > 0) it.id else com.example.util.IdGenerator.nextId()
+            it.copy(id = itemId, saleId = finalSaleId)
+        }
         dao.insertSaleItems(preparedItems)
 
         val affectedProducts = mutableListOf<Product>()
@@ -114,26 +121,28 @@ class PaponRepository(private val dao: PaponDao) {
         }
 
         // If sale has customer and due amount > 0, record in customer ledger
-        if (sale.customerId != null && sale.dueAmountPoisha > 0) {
+        if (targetSale.customerId != null && targetSale.dueAmountPoisha > 0) {
+            val ledgerId = com.example.util.IdGenerator.nextId()
             val ledger = CustomerLedger(
-                customerId = sale.customerId,
+                id = ledgerId,
+                customerId = targetSale.customerId,
                 refType = "sale",
-                refId = saleId,
-                debitPoisha = sale.dueAmountPoisha,
+                refId = finalSaleId,
+                debitPoisha = targetSale.dueAmountPoisha,
                 creditPoisha = 0,
-                note = "বিক্রয় ইনভয়েস: ${sale.invoiceNo}"
+                note = "বিক্রয় ইনভয়েস: ${targetSale.invoiceNo}"
             )
-            val ledgerId = dao.insertCustomerLedger(ledger)
+            dao.insertCustomerLedger(ledger)
             scope.launch {
-                supabaseSync.syncCustomerLedger(ledger.copy(id = ledgerId))
+                supabaseSync.syncCustomerLedger(ledger)
             }
         }
 
         scope.launch {
-            supabaseSync.syncSale(sale.copy(id = saleId), preparedItems, affectedProducts)
+            supabaseSync.syncSale(targetSale.copy(id = finalSaleId), preparedItems, affectedProducts)
         }
 
-        saleId
+        finalSaleId
     }
 
 
@@ -209,7 +218,9 @@ class PaponRepository(private val dao: PaponDao) {
 
             // If customer had due, adjust customer ledger
             if (sale.customerId != null && sale.dueAmountPoisha > 0) {
+                val ledgerId = com.example.util.IdGenerator.nextId()
                 val ledger = CustomerLedger(
+                    id = ledgerId,
                     customerId = sale.customerId,
                     refType = "sale_return",
                     refId = saleId,
@@ -217,9 +228,9 @@ class PaponRepository(private val dao: PaponDao) {
                     creditPoisha = sale.dueAmountPoisha,
                     note = "বিক্রয় ফেরত সমন্বয়: ${sale.invoiceNo}"
                 )
-                val ledgerId = dao.insertCustomerLedger(ledger)
+                dao.insertCustomerLedger(ledger)
                 scope.launch {
-                    supabaseSync.syncCustomerLedger(ledger.copy(id = ledgerId))
+                    supabaseSync.syncCustomerLedger(ledger)
                 }
             }
 
@@ -240,7 +251,9 @@ class PaponRepository(private val dao: PaponDao) {
 
                 // Adjust customer ledger for due reduction
                 if (sale.customerId != null && dueReduction > 0) {
+                    val ledgerId = com.example.util.IdGenerator.nextId()
                     val ledger = CustomerLedger(
+                        id = ledgerId,
                         customerId = sale.customerId,
                         refType = "sale_return",
                         refId = saleId,
@@ -248,9 +261,9 @@ class PaponRepository(private val dao: PaponDao) {
                         creditPoisha = dueReduction,
                         note = "আংশিক পণ্য ফেরত সমন্বয়: ${sale.invoiceNo}"
                     )
-                    val ledgerId = dao.insertCustomerLedger(ledger)
+                    dao.insertCustomerLedger(ledger)
                     scope.launch {
-                        supabaseSync.syncCustomerLedger(ledger.copy(id = ledgerId))
+                        supabaseSync.syncCustomerLedger(ledger)
                     }
                 }
             } else {
@@ -297,11 +310,13 @@ class PaponRepository(private val dao: PaponDao) {
     val totalDueFlow: Flow<Long> = dao.getTotalDueFlow()
 
     suspend fun saveCustomer(customer: Customer): Long {
-        val id = dao.insertCustomer(customer)
-        val saved = customer.copy(id = id)
-        dao.removeDeletedRecord("customers", id)
+        val target = if (customer.id > 0) customer else customer.copy(id = com.example.util.IdGenerator.nextId())
+        val id = dao.insertCustomer(target)
+        val finalId = if (target.id > 0) target.id else id
+        val saved = target.copy(id = finalId)
+        dao.removeDeletedRecord("customers", finalId)
         scope.launch { supabaseSync.syncCustomer(saved) }
-        return id
+        return finalId
     }
     suspend fun getCustomerById(id: Long): Customer? = dao.getCustomerById(id)
     fun getCustomerLedger(customerId: Long): Flow<List<CustomerLedger>> = dao.getCustomerLedger(customerId)
@@ -317,7 +332,9 @@ class PaponRepository(private val dao: PaponDao) {
     }
 
     suspend fun collectDuePayment(customerId: Long, amountPoisha: Long, note: String?): Long {
+        val ledgerId = com.example.util.IdGenerator.nextId()
         val ledger = CustomerLedger(
+            id = ledgerId,
             customerId = customerId,
             refType = "payment",
             refId = null,
@@ -325,9 +342,9 @@ class PaponRepository(private val dao: PaponDao) {
             creditPoisha = amountPoisha,
             note = note ?: "বাকি আদায়"
         )
-        val id = dao.insertCustomerLedger(ledger)
-        scope.launch { supabaseSync.syncCustomerLedger(ledger.copy(id = id)) }
-        return id
+        dao.insertCustomerLedger(ledger)
+        scope.launch { supabaseSync.syncCustomerLedger(ledger) }
+        return ledgerId
     }
 
     // --- SUPPLIERS & PURCHASES ---
@@ -335,11 +352,13 @@ class PaponRepository(private val dao: PaponDao) {
     val allPurchases: Flow<List<Purchase>> = dao.getAllPurchases()
 
     suspend fun saveSupplier(supplier: Supplier): Long {
-        val id = dao.insertSupplier(supplier)
-        val saved = supplier.copy(id = id)
-        dao.removeDeletedRecord("suppliers", id)
+        val target = if (supplier.id > 0) supplier else supplier.copy(id = com.example.util.IdGenerator.nextId())
+        val id = dao.insertSupplier(target)
+        val finalId = if (target.id > 0) target.id else id
+        val saved = target.copy(id = finalId)
+        dao.removeDeletedRecord("suppliers", finalId)
         scope.launch { supabaseSync.syncSupplier(saved) }
-        return id
+        return finalId
     }
 
     suspend fun deleteSupplier(supplierId: Long) = withContext(Dispatchers.IO) {
@@ -363,9 +382,14 @@ class PaponRepository(private val dao: PaponDao) {
         purchase: Purchase,
         items: List<PurchaseItem>
     ): Long = withContext(Dispatchers.IO) {
-        val purchaseId = dao.insertPurchase(purchase)
-        dao.removeDeletedRecord("purchases", purchaseId)
-        val preparedItems = items.map { it.copy(purchaseId = purchaseId) }
+        val targetPurchase = if (purchase.id > 0) purchase else purchase.copy(id = com.example.util.IdGenerator.nextId())
+        val purchaseId = dao.insertPurchase(targetPurchase)
+        val finalPurchaseId = if (targetPurchase.id > 0) targetPurchase.id else purchaseId
+        dao.removeDeletedRecord("purchases", finalPurchaseId)
+        val preparedItems = items.map {
+            val itemId = if (it.id > 0) it.id else com.example.util.IdGenerator.nextId()
+            it.copy(id = itemId, purchaseId = finalPurchaseId)
+        }
         dao.insertPurchaseItems(preparedItems)
 
         val affectedProducts = mutableListOf<Product>()
@@ -411,11 +435,13 @@ class PaponRepository(private val dao: PaponDao) {
     val allExpenses: Flow<List<Expense>> = dao.getAllExpenses()
 
     suspend fun addExpense(expense: Expense): Long {
-        val id = dao.insertExpense(expense)
-        val saved = expense.copy(id = id)
-        dao.removeDeletedRecord("expenses", id)
+        val target = if (expense.id > 0) expense else expense.copy(id = com.example.util.IdGenerator.nextId())
+        val id = dao.insertExpense(target)
+        val finalId = if (target.id > 0) target.id else id
+        val saved = target.copy(id = finalId)
+        dao.removeDeletedRecord("expenses", finalId)
         scope.launch { supabaseSync.syncExpense(saved) }
-        return id
+        return finalId
     }
 
     suspend fun deleteExpense(expenseId: Long) = withContext(Dispatchers.IO) {

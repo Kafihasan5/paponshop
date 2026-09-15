@@ -43,7 +43,9 @@ data class ShopConfig(
     val userRole: String = "owner", // "owner" or "staff"
     val allowNegativeStock: Boolean = true,
     val isOnboardingCompleted: Boolean = true,
-    val noticeMessage: String = ""
+    val noticeMessage: String = "",
+    val devicePrefix: String = "A",
+    val deviceName: String = "কাউন্টার ১"
 )
 
 data class AppUpdateInfo(
@@ -485,8 +487,18 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val now = System.currentTimeMillis()
-                val invoice = "INV-${System.currentTimeMillis() % 1000000}"
+                val prefix = _shopConfig.value.devicePrefix.ifBlank { "A" }.trim()
+                val invoice = "INV-${prefix}-${System.currentTimeMillis() % 1000000}"
+                val slot = when (prefix.uppercase()) {
+                    "A", "১" -> 1
+                    "B", "২" -> 2
+                    "C", "৩" -> 3
+                    "D", "৪" -> 4
+                    else -> (kotlin.math.abs(prefix.hashCode()) % 8 + 1)
+                }
+                val generatedSaleId = com.example.util.IdGenerator.nextId(slot)
                 val sale = Sale(
+                    id = generatedSaleId,
                     invoiceNo = invoice,
                     customerId = custId,
                     customerName = customer?.name,
@@ -893,6 +905,8 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
             val userRole = prefs.getString("user_role", "owner") ?: "owner"
             val allowNegativeStock = prefs.getBoolean("allow_negative_stock", true)
             val noticeMessage = prefs.getString("notice_message", "") ?: ""
+            val devicePrefix = prefs.getString("device_prefix", "A") ?: "A"
+            val deviceName = prefs.getString("device_name", "কাউন্টার ১") ?: "কাউন্টার ১"
 
             _shopConfig.value = ShopConfig(
                 shopName = shopName,
@@ -909,7 +923,9 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
                 userRole = userRole,
                 allowNegativeStock = allowNegativeStock,
                 isOnboardingCompleted = true,
-                noticeMessage = noticeMessage
+                noticeMessage = noticeMessage,
+                devicePrefix = devicePrefix,
+                deviceName = deviceName
             )
         } catch (_: Exception) {}
     }
@@ -931,6 +947,8 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
                 putString("user_role", config.userRole)
                 putBoolean("allow_negative_stock", config.allowNegativeStock)
                 putString("notice_message", config.noticeMessage)
+                putString("device_prefix", config.devicePrefix)
+                putString("device_name", config.deviceName)
                 apply()
             }
         } catch (_: Exception) {}
