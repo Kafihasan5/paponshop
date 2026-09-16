@@ -47,6 +47,8 @@ fun ReceiptScreen(
     val sale by viewModel.lastCompletedSale.collectAsState()
     val saleItems by viewModel.lastCompletedSaleItems.collectAsState()
     val customers by viewModel.customers.collectAsState()
+    val lastCashTenderedPoisha by viewModel.lastCashTenderedPoisha.collectAsState()
+    val lastChangeReturnPoisha by viewModel.lastChangeReturnPoisha.collectAsState()
 
     if (sale == null) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -414,6 +416,17 @@ fun ReceiptScreen(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("পরিশোধিত:", fontSize = 13.sp)
                         Text(Formatters.formatMoney(currentSale.paidAmountPoisha, config.useBengaliNumerals, config.currencySymbol), fontSize = 13.sp)
+                    }
+
+                    if (lastCashTenderedPoisha > currentSale.totalPoisha && currentSale.paymentMethod == "cash") {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("নগদ দিয়েছেন:", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(Formatters.formatMoney(lastCashTenderedPoisha, config.useBengaliNumerals, config.currencySymbol), fontSize = 13.sp)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("ফেরত দেওয়া হয়েছে:", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = StatusSuccess)
+                            Text(Formatters.formatMoney(lastChangeReturnPoisha, config.useBengaliNumerals, config.currencySymbol), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = StatusSuccess)
+                        }
                     }
 
                     if (currentSale.dueAmountPoisha > 0) {

@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -592,51 +594,220 @@ fun CartCheckoutBottomSheet(
                 }
             }
 
-            // If cash selected, show quick tender buttons
+            // If cash selected, show cash received input, note chips, and live change return
             if (selectedPaymentMethod == "cash") {
-                val grandTotalTaka = grandTotal / 100
-                Row(
+                val grandTotalTaka = (grandTotal / 100).coerceAtLeast(0)
+
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf(
-                        grandTotalTaka,
-                        grandTotalTaka + 50,
-                        grandTotalTaka + 100,
-                        500L,
-                        1000L
-                    ).distinct().take(4).forEach { amt ->
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.setCashTendered(amt * 100)
-                            },
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = "${config.currencySymbol}${if (config.useBengaliNumerals) Formatters.toBengaliDigits(amt.toString()) else amt}",
-                                fontSize = 12.sp
+                    // 1. Direct cash note input box
+                    OutlinedTextField(
+                        value = cashInput,
+                        onValueChange = { input ->
+                            cashInput = input
+                            val cleanInput = Formatters.toEnglishDigits(input.trim())
+                            val amtDouble = cleanInput.toDoubleOrNull() ?: 0.0
+                            val poisha = (amtDouble * 100).toLong()
+                            viewModel.setCashTendered(poisha)
+                        },
+                        label = { Text("গ্রাহকের দেওয়া টাকা / নোট (৳)") },
+                        placeholder = { Text("যেমন: ১০০০ বা ৫০০") },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.Payments,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
                             )
-                        }
-                    }
-                }
+                        },
+                        trailingIcon = {
+                            if (cashInput.isNotBlank()) {
+                                IconButton(onClick = {
+                                    cashInput = ""
+                                    viewModel.setCashTendered(0L)
+                                }) {
+                                    Icon(
+                                        Icons.Default.Clear,
+                                        contentDescription = "মুছুন",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
 
-                if (changeReturnPoisha > 0) {
+                    // 2. Quick Note Buttons Row
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text("ফেরত দিতে হবে:", color = StatusSuccess, fontWeight = FontWeight.Bold)
-                        Text(
-                            Formatters.formatMoney(changeReturnPoisha, config.useBengaliNumerals, config.currencySymbol),
-                            color = StatusSuccess,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
+                        // "হুবহু টাকা" Chip
+                        FilterChip(
+                            selected = (cashTenderedPoisha == grandTotal && cashTenderedPoisha > 0),
+                            onClick = {
+                                cashInput = grandTotalTaka.toString()
+                                viewModel.setCashTendered(grandTotal)
+                            },
+                            label = {
+                                Text(
+                                    "হুবহু টাকা: ${Formatters.formatMoney(grandTotal, config.useBengaliNumerals, config.currencySymbol)}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp))
+                            }
                         )
+
+                        // Standard Bangladeshi Denominations
+                        listOf(1000L, 500L, 200L, 100L, 50L).forEach { noteTaka ->
+                            val isSelected = (cashTenderedPoisha == noteTaka * 100)
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    cashInput = noteTaka.toString()
+                                    viewModel.setCashTendered(noteTaka * 100)
+                                },
+                                label = {
+                                    Text(
+                                        "${config.currencySymbol}${if (config.useBengaliNumerals) Formatters.toBengaliDigits(noteTaka.toString()) else noteTaka}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            )
+                        }
+                    }
+
+                    // 3. Live Change Calculation Card
+                    if (changeReturnPoisha > 0) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = StatusSuccess.copy(alpha = 0.12f)),
+                            border = androidx.compose.foundation.BorderStroke(1.5.dp, StatusSuccess)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(StatusSuccess.copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AssignmentReturn,
+                                            contentDescription = null,
+                                            tint = StatusSuccess,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "গ্রাহককে ফেরত দিন",
+                                            fontSize = 12.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = Formatters.formatMoney(changeReturnPoisha, config.useBengaliNumerals, config.currencySymbol),
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = StatusSuccess
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    color = StatusSuccess,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = "ফেরত টাকা",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    } else if (cashTenderedPoisha > 0 && cashTenderedPoisha == grandTotal) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    "হুবহু টাকা পরিশোধ (কোনো ফেরত নেই)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    } else if (cashTenderedPoisha > 0 && cashTenderedPoisha < grandTotal) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = StatusWarning.copy(alpha = 0.15f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = StatusWarning,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        "কম দেওয়া হয়েছে:",
+                                        fontSize = 13.sp,
+                                        color = StatusWarning,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Text(
+                                    Formatters.formatMoney(grandTotal - cashTenderedPoisha, config.useBengaliNumerals, config.currencySymbol),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = StatusWarning
+                                )
+                            }
+                        }
                     }
                 }
             }

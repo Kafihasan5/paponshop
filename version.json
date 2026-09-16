@@ -1,6 +1,6 @@
 {
-  "versionCode": 18,
-  "versionName": "1.0.18",
-  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v18/app-debug.apk",
-  "releaseNotes": "feat: apply Dokan Pro UI design system and Bangla fonts preserving Papon Shop core system (v1.0.18)"
+  "versionCode": 19,
+  "versionName": "1.0.19",
+  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v19/app-debug.apk",
+  "releaseNotes": "Add cash received note input, quick note chips, and live change return calculator in POS checkout"
 }
