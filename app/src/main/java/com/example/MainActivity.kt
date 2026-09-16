@@ -12,8 +12,11 @@ import com.example.ui.PaponApp
 import com.example.ui.PaponViewModel
 import com.example.ui.theme.PaponShopTheme
 
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {

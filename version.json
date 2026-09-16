@@ -1,6 +1,6 @@
 {
-  "versionCode": 15,
-  "versionName": "1.0.15",
-  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v15/app-debug.apk",
-  "releaseNotes": "Add customer opening due balance support"
+  "versionCode": 18,
+  "versionName": "1.0.18",
+  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v18/app-debug.apk",
+  "releaseNotes": "Dokan Pro UI Design & Bangla Typography applied cleanly on Papon Shop core system"
 }
