@@ -53,6 +53,7 @@ fun ProductsScreen(
     var productToEdit by remember { mutableStateOf<Product?>(null) }
     var isAddingNew by remember { mutableStateOf(false) }
     var productForStockAdjust by remember { mutableStateOf<Product?>(null) }
+    var productToDelete by remember { mutableStateOf<Product?>(null) }
     var showCategoryUnitManager by remember { mutableStateOf(false) }
     var initialManageTab by remember { mutableStateOf(0) }
 
@@ -330,7 +331,7 @@ fun ProductsScreen(
                             config = config,
                             onEdit = { productToEdit = product },
                             onAdjustStock = { productForStockAdjust = product },
-                            onDelete = { viewModel.deleteProduct(product.id) }
+                            onDelete = { productToDelete = product }
                         )
                     }
                 }
@@ -356,6 +357,14 @@ fun ProductsScreen(
                     productToEdit = null
                 }
             },
+            onDelete = if (productToEdit != null) {
+                {
+                    val p = productToEdit
+                    isAddingNew = false
+                    productToEdit = null
+                    productToDelete = p
+                }
+            } else null,
             onManageCategories = {
                 initialManageTab = 0
                 showCategoryUnitManager = true
@@ -385,6 +394,54 @@ fun ProductsScreen(
             viewModel = viewModel,
             initialTab = initialManageTab,
             onDismiss = { showCategoryUnitManager = false }
+        )
+    }
+
+    // Delete Product Confirmation Dialog
+    if (productToDelete != null) {
+        val prod = productToDelete!!
+        AlertDialog(
+            onDismissRequest = { productToDelete = null },
+            icon = {
+                Icon(
+                    Icons.Default.DeleteForever,
+                    contentDescription = null,
+                    tint = StatusDanger,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = { Text("পণ্য মুছে ফেলার নিশ্চিতকরণ", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "আপনি কি নিশ্চিতভাবে \"${prod.nameBn}\" পণ্যটি মুছে ফেলতে চান?",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "⚠️ এটি স্থানীয় তালিকা ও ক্লাউড ডাটাবেজ উভয় স্থান থেকেই মুছে যাবে।",
+                        fontSize = 12.sp,
+                        color = StatusDanger
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val id = prod.id
+                        productToDelete = null
+                        viewModel.deleteProduct(id)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusDanger)
+                ) {
+                    Text("মুছে ফেলুন", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { productToDelete = null }) {
+                    Text("বাতিল")
+                }
+            }
         )
     }
 }
@@ -488,6 +545,17 @@ fun ProductManagementCard(
                     IconButton(onClick = onEdit, modifier = Modifier.size(34.dp)) {
                         Icon(Icons.Default.Edit, contentDescription = "সম্পাদনা", modifier = Modifier.size(18.dp))
                     }
+
+                    Spacer(modifier = Modifier.width(2.dp))
+
+                    IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
+                        Icon(
+                            Icons.Default.DeleteOutline,
+                            contentDescription = "পণ্য মুছুন",
+                            modifier = Modifier.size(20.dp),
+                            tint = StatusDanger
+                        )
+                    }
                 }
             }
         }
@@ -502,6 +570,7 @@ fun ProductFormDialog(
     units: List<String>,
     onDismiss: () -> Unit,
     onSave: (Product) -> Unit,
+    onDelete: (() -> Unit)? = null,
     onManageCategories: () -> Unit,
     onManageUnits: () -> Unit
 ) {
@@ -677,7 +746,20 @@ fun ProductFormDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("বাতিল") }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (initialProduct != null && onDelete != null) {
+                    TextButton(
+                        onClick = onDelete,
+                        colors = ButtonDefaults.textButtonColors(contentColor = StatusDanger)
+                    ) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("মুছে ফেলুন", color = StatusDanger)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                TextButton(onClick = onDismiss) { Text("বাতিল") }
+            }
         }
     )
 }

@@ -1,6 +1,6 @@
 {
-  "versionCode": 13,
-  "versionName": "1.0.13",
-  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v13/app-debug.apk",
-  "releaseNotes": "Add Product Profit on Dashboard without expense deduction, fix Supabase API key cloud sync, and enable conflict-free multi-device counter sync"
+  "versionCode": 14,
+  "versionName": "1.0.14",
+  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v14/app-debug.apk",
+  "releaseNotes": "Add product removal/deletion system: delete button on product cards, delete button inside edit dialog, and safe confirmation dialog syncing with cloud"
 }
