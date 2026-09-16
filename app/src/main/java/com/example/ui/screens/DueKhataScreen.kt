@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -186,8 +188,8 @@ fun DueKhataScreen(
     if (showAddCustomerDialog) {
         AddCustomerDialog(
             onDismiss = { showAddCustomerDialog = false },
-            onSave = { newCust ->
-                viewModel.saveCustomer(newCust) {
+            onSave = { newCust, initialDuePoisha ->
+                viewModel.saveCustomer(newCust, initialDuePoisha) {
                     showAddCustomerDialog = false
                 }
             }
@@ -626,8 +628,13 @@ fun LedgerItemRow(item: CustomerLedger, config: ShopConfig) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
+                val title = when (item.refType) {
+                    "opening_due" -> "পূর্বের বকেয়া / শুরুর বাকি"
+                    "sale_return" -> "ফেরত সমন্বয়"
+                    else -> if (isPayment) "জমা / আদায়" else "বাকি ক্রয়"
+                }
                 Text(
-                    text = if (isPayment) "জমা / আদায়" else "বাকি ক্রয়",
+                    text = title,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp,
                     color = if (isPayment) StatusSuccess else StatusDanger
@@ -725,11 +732,12 @@ fun DueCollectionDialog(
 @Composable
 fun AddCustomerDialog(
     onDismiss: () -> Unit,
-    onSave: (Customer) -> Unit
+    onSave: (Customer, Long) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
+    var initialDueText by remember { mutableStateOf("") }
     var creditLimitText by remember { mutableStateOf("5000") }
 
     AlertDialog(
@@ -750,6 +758,7 @@ fun AddCustomerDialog(
                     onValueChange = { phone = it },
                     label = { Text("মোবাইল নম্বর *") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -762,10 +771,21 @@ fun AddCustomerDialog(
                 )
 
                 OutlinedTextField(
+                    value = initialDueText,
+                    onValueChange = { initialDueText = it },
+                    label = { Text("পূর্বের বাকি / শুরুর বকেয়া (৳)") },
+                    placeholder = { Text("০ (না থাকলে খালি রাখুন)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
                     value = creditLimitText,
                     onValueChange = { creditLimitText = it.filter { c -> c.isDigit() } },
                     label = { Text("সর্বোচ্চ বাকি লিমিট (৳)") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -775,13 +795,26 @@ fun AddCustomerDialog(
                 onClick = {
                     if (name.isNotBlank() && phone.isNotBlank()) {
                         val limitPoisha = ((creditLimitText.toLongOrNull() ?: 5000L) * 100)
+                        val initialDuePoisha = try {
+                            val sanitized = initialDueText.map { c ->
+                                when (c) {
+                                    '০' -> '0'; '১' -> '1'; '২' -> '2'; '৩' -> '3'; '৪' -> '4'
+                                    '৫' -> '5'; '৬' -> '6'; '৭' -> '7'; '৮' -> '8'; '৯' -> '9'
+                                    else -> c
+                                }
+                            }.joinToString("").filter { it.isDigit() || it == '.' }
+                            ((sanitized.toDoubleOrNull() ?: 0.0) * 100).toLong().coerceAtLeast(0L)
+                        } catch (e: Exception) {
+                            0L
+                        }
                         onSave(
                             Customer(
                                 name = name.trim(),
                                 phone = phone.trim(),
                                 address = address.trim().ifBlank { null },
                                 creditLimitPoisha = limitPoisha
-                            )
+                            ),
+                            initialDuePoisha
                         )
                     }
                 },

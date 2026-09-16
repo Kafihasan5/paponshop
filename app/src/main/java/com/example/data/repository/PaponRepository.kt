@@ -309,13 +309,30 @@ class PaponRepository(private val dao: PaponDao) {
     val allCustomers: Flow<List<Customer>> = dao.getAllCustomers()
     val totalDueFlow: Flow<Long> = dao.getTotalDueFlow()
 
-    suspend fun saveCustomer(customer: Customer): Long {
+    suspend fun saveCustomer(customer: Customer, initialDuePoisha: Long = 0L): Long {
+        val isNewCustomer = customer.id == 0L
         val target = if (customer.id > 0) customer else customer.copy(id = com.example.util.IdGenerator.nextId())
         val id = dao.insertCustomer(target)
         val finalId = if (target.id > 0) target.id else id
         val saved = target.copy(id = finalId)
         dao.removeDeletedRecord("customers", finalId)
         scope.launch { supabaseSync.syncCustomer(saved) }
+
+        if (isNewCustomer && initialDuePoisha > 0) {
+            val ledgerId = com.example.util.IdGenerator.nextId()
+            val ledger = CustomerLedger(
+                id = ledgerId,
+                customerId = finalId,
+                refType = "opening_due",
+                refId = null,
+                debitPoisha = initialDuePoisha,
+                creditPoisha = 0,
+                note = "পূর্বের বকেয়া"
+            )
+            dao.insertCustomerLedger(ledger)
+            scope.launch { supabaseSync.syncCustomerLedger(ledger) }
+        }
+
         return finalId
     }
     suspend fun getCustomerById(id: Long): Customer? = dao.getCustomerById(id)

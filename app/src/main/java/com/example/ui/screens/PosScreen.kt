@@ -15,7 +15,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -723,8 +725,8 @@ fun CartCheckoutBottomSheet(
                 viewModel.selectCustomer(cust?.id)
                 showCustomerPicker = false
             },
-            onAddNew = { name, phone ->
-                viewModel.saveCustomer(Customer(name = name, phone = phone)) {
+            onAddNew = { name, phone, initialDue ->
+                viewModel.saveCustomer(Customer(name = name, phone = phone), initialDuePoisha = initialDue) {
                     // Created
                 }
             }
@@ -1072,12 +1074,13 @@ fun CustomerPickerDialog(
     customers: List<Customer>,
     onDismiss: () -> Unit,
     onSelect: (Customer?) -> Unit,
-    onAddNew: (String, String) -> Unit
+    onAddNew: (String, String, Long) -> Unit
 ) {
     var search by remember { mutableStateOf("") }
     var isAddingNew by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
     var newPhone by remember { mutableStateOf("") }
+    var newDueText by remember { mutableStateOf("") }
 
     val filtered = customers.filter {
         it.name.contains(search, ignoreCase = true) || it.phone.contains(search)
@@ -1092,15 +1095,25 @@ fun CustomerPickerDialog(
                     OutlinedTextField(
                         value = newName,
                         onValueChange = { newName = it },
-                        label = { Text("কাস্টমারের নাম") },
+                        label = { Text("কাস্টমারের নাম *") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = newPhone,
                         onValueChange = { newPhone = it },
-                        label = { Text("মোবাইল নম্বর") },
+                        label = { Text("মোবাইল নম্বর *") },
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = newDueText,
+                        onValueChange = { newDueText = it },
+                        label = { Text("পূর্বের বাকি / বকেয়া (৳)") },
+                        placeholder = { Text("০ (না থাকলে খালি রাখুন)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1161,10 +1174,23 @@ fun CustomerPickerDialog(
                 Button(
                     onClick = {
                         if (newName.isNotBlank() && newPhone.isNotBlank()) {
-                            onAddNew(newName, newPhone)
+                            val initialDuePoisha = try {
+                                val sanitized = newDueText.map { c ->
+                                    when (c) {
+                                        '০' -> '0'; '১' -> '1'; '২' -> '2'; '৩' -> '3'; '৪' -> '4'
+                                        '৫' -> '5'; '৬' -> '6'; '৭' -> '7'; '৮' -> '8'; '৯' -> '9'
+                                        else -> c
+                                    }
+                                }.joinToString("").filter { it.isDigit() || it == '.' }
+                                ((sanitized.toDoubleOrNull() ?: 0.0) * 100).toLong().coerceAtLeast(0L)
+                            } catch (e: Exception) {
+                                0L
+                            }
+                            onAddNew(newName.trim(), newPhone.trim(), initialDuePoisha)
                             isAddingNew = false
                         }
-                    }
+                    },
+                    enabled = newName.isNotBlank() && newPhone.isNotBlank()
                 ) {
                     Text("যোগ করুন")
                 }

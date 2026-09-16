@@ -500,6 +500,8 @@ object InvoiceImageHelper {
                 val desc = when (entry.refType) {
                     "sale" -> "পণ্য ক্রয় (বাকি)"
                     "payment" -> "বাকি পরিশোধ/জমা"
+                    "opening_due" -> "পূর্বের বকেয়া / শুরুর বাকি"
+                    "sale_return" -> "ফেরত সমন্বয়"
                     else -> entry.note ?: "সমন্বয়"
                 }
                 canvas.drawText(desc, 220f, y, paint)

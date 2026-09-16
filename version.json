@@ -1,6 +1,6 @@
 {
-  "versionCode": 14,
-  "versionName": "1.0.14",
-  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v14/app-debug.apk",
-  "releaseNotes": "Add product removal/deletion system: delete button on product cards, delete button inside edit dialog, and safe confirmation dialog syncing with cloud"
+  "versionCode": 15,
+  "versionName": "1.0.15",
+  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v15/app-debug.apk",
+  "releaseNotes": "Add customer opening due balance (পূর্বের বাকি) input in Due Khata and POS screen"
 }
