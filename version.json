@@ -2,5 +2,5 @@
   "versionCode": 19,
   "versionName": "1.0.19",
   "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v19/app-debug.apk",
-  "releaseNotes": "Add cash received note input, quick note chips, and live change return calculator in POS checkout"
+  "releaseNotes": "feat: add cash received note input, quick note chips, and live change return calculator (v1.0.19)"
 }
