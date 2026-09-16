@@ -1,6 +1,6 @@
 {
-  "versionCode": 20,
-  "versionName": "1.0.20",
-  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v20/app-debug.apk",
-  "releaseNotes": "fix: adjust checkout button position and prevent keyboard from hiding payment confirm button (v1.0.20)"
+  "versionCode": 21,
+  "versionName": "1.0.21",
+  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v21/app-debug.apk",
+  "releaseNotes": "fix: remove unsupported windowInsets argument from ModalBottomSheet"
 }
