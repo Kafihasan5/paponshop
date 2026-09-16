@@ -22,4 +22,7 @@ object SupabaseConfig {
         } catch (_: Throwable) {
             DEFAULT_ANON_KEY
         }
+
+    val isConnected: Boolean
+        get() = url.isNotBlank() && anonKey.isNotBlank()
 }

@@ -1142,10 +1142,9 @@ private fun ProductFormBottomSheet(
                     horizontalArrangement = Arrangement.spacedBy(Spacing.md)
                 ) {
                     if (initialProduct != null && onDelete != null) {
-                        DokanSecondaryButton(
+                        DokanDangerButton(
                             text = "মুছে ফেলুন",
                             onClick = { onDelete(initialProduct) },
-                            textColor = MaterialTheme.dokanColors.danger,
                             modifier = Modifier.weight(1f)
                         )
                     }
