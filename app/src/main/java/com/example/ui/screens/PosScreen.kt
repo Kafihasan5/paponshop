@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -202,7 +203,7 @@ fun PosScreen(
             // Products Grid
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 140.dp),
+                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 80.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier
@@ -236,8 +237,7 @@ fun PosScreen(
             exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(bottom = 76.dp, start = 12.dp, end = 12.dp)
+                .padding(start = 12.dp, end = 12.dp, bottom = 8.dp)
         ) {
             Surface(
                 modifier = Modifier
@@ -494,13 +494,15 @@ fun CartCheckoutBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        windowInsets = BottomSheetDefaults.windowInsets.union(WindowInsets.ime)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp)
         ) {
             // Sheet Header
             Row(
@@ -534,23 +536,27 @@ fun CartCheckoutBottomSheet(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Cart Items List
-            LazyColumn(
+            // Scrollable Content Body (Cart items + Customer + Payment + Cash input/change + Summary)
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = false)
-                    .heightIn(max = 220.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
-                items(cartItems) { item ->
-                    CartItemRow(
-                        item = item,
-                        config = config,
-                        onQtyChange = { newQty -> viewModel.updateCartItemQty(item.productId, newQty) },
-                        onRemove = { viewModel.removeCartItem(item.productId) }
-                    )
+                // Cart Items List
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    cartItems.forEach { item ->
+                        CartItemRow(
+                            item = item,
+                            config = config,
+                            onQtyChange = { newQty -> viewModel.updateCartItemQty(item.productId, newQty) },
+                            onRemove = { viewModel.removeCartItem(item.productId) }
+                        )
+                    }
                 }
-            }
 
             Divider(modifier = Modifier.padding(vertical = 10.dp))
 
@@ -855,8 +861,10 @@ fun CartCheckoutBottomSheet(
                     }
                 }
             }
+            }
 
-            // Checkout CTA Button
+            // Checkout CTA Button (Pinned directly at bottom above keyboard & navigation bar)
+            Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = {
                     viewModel.checkoutSale(
@@ -870,6 +878,7 @@ fun CartCheckoutBottomSheet(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(bottom = 12.dp)
                     .height(52.dp)
                     .testTag("checkout_confirm_btn"),
                 shape = RoundedCornerShape(14.dp)

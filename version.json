@@ -1,6 +1,6 @@
 {
-  "versionCode": 19,
-  "versionName": "1.0.19",
-  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v19/app-debug.apk",
-  "releaseNotes": "feat: add cash received note input, quick note chips, and live change return calculator (v1.0.19)"
+  "versionCode": 20,
+  "versionName": "1.0.20",
+  "downloadUrl": "https://github.com/Kafihasan5/paponshop/releases/download/v20/app-debug.apk",
+  "releaseNotes": "fix: adjust checkout button position and prevent keyboard from hiding payment confirm button (v1.0.20)"
 }
