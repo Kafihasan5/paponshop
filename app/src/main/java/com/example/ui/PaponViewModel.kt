@@ -12,6 +12,8 @@ import com.example.util.Formatters
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import java.util.Calendar
 import org.json.JSONArray
 
@@ -29,7 +31,7 @@ data class CartItem(
 }
 
 data class ShopConfig(
-    val shopName: String = "পাপন শপ",
+    val shopName: String = "Dokan Pro",
     val shopAddress: String = "বাজার রোড, ঢাকা",
     val shopPhone: String = "০১৭১১-০০০০০০",
     val tagline: String = "আপনার বিশ্বস্ত মুদি দোকান",
@@ -92,29 +94,210 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
     private val _appUpdateInfo = MutableStateFlow(AppUpdateInfo())
     val appUpdateInfo: StateFlow<AppUpdateInfo> = _appUpdateInfo.asStateFlow()
 
+    private val _isCheckingUpdate = MutableStateFlow(false)
+    val isCheckingUpdate: StateFlow<Boolean> = _isCheckingUpdate.asStateFlow()
+
+    private val _showUpdateDialogEvent = MutableStateFlow(false)
+    val showUpdateDialogEvent: StateFlow<Boolean> = _showUpdateDialogEvent.asStateFlow()
+
+    fun openUpdateDialog() {
+        if (_appUpdateInfo.value.isUpdateAvailable) {
+            _showUpdateDialogEvent.value = true
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        _showUpdateDialogEvent.value = false
+    }
+
     private val defaultUnits = listOf("কেজি", "গ্রাম", "লিটার", "মিলি", "পিস", "প্যাকেট", "হালি", "ডজন", "বস্তা", "বক্স", "কার্টুন", "মিটার", "বোতল")
     private val _units = MutableStateFlow<List<String>>(defaultUnits)
     val units: StateFlow<List<String>> = _units.asStateFlow()
+
+    val licenseManager = com.example.data.license.AppLicenseManager(application)
+    private val _isAppActivated = MutableStateFlow(licenseManager.isActivated())
+    val isAppActivated: StateFlow<Boolean> = _isAppActivated.asStateFlow()
+
+    private val _isActivating = MutableStateFlow(false)
+    val isActivating: StateFlow<Boolean> = _isActivating.asStateFlow()
+
+    private val _activationError = MutableStateFlow<String?>(null)
+    val activationError: StateFlow<String?> = _activationError.asStateFlow()
+
+    private val _licenseInfo = MutableStateFlow(licenseManager.getLicenseInfo())
+    val licenseInfo: StateFlow<com.example.data.license.LicenseInfo?> = _licenseInfo.asStateFlow()
+
+    // 1-Hour Free Demo Mode State
+    private val _isDemoMode = MutableStateFlow(licenseManager.isDemoMode())
+    val isDemoMode: StateFlow<Boolean> = _isDemoMode.asStateFlow()
+
+    private val _remainingDemoMillis = MutableStateFlow(licenseManager.getRemainingDemoMillis())
+    val remainingDemoMillis: StateFlow<Long> = _remainingDemoMillis.asStateFlow()
+
+    private val _isDemoUsed = MutableStateFlow(licenseManager.wasDemoUsed())
+    val isDemoUsed: StateFlow<Boolean> = _isDemoUsed.asStateFlow()
+
+    private val _isDemoExpired = MutableStateFlow(licenseManager.isDemoExpired())
+    val isDemoExpired: StateFlow<Boolean> = _isDemoExpired.asStateFlow()
+
+    private var demoTimerJob: Job? = null
+
+    private fun startDemoTimerTicker() {
+        demoTimerJob?.cancel()
+        demoTimerJob = viewModelScope.launch {
+            while (licenseManager.isDemoMode()) {
+                val remaining = licenseManager.getRemainingDemoMillis()
+                _remainingDemoMillis.value = remaining
+                if (remaining <= 0) {
+                    _isDemoMode.value = false
+                    _isDemoExpired.value = true
+                    if (!licenseManager.isRealLicenseActive()) {
+                        _isAppActivated.value = false
+                        showToast("⏱️ ১ ঘণ্টার ফ্রি ডেমো মেয়াদ সমাপ্ত হয়েছে। নিয়মিত ব্যবহারের জন্য লাইসেন্স সংগ্রহ করুন (৳৪৯০)।")
+                    }
+                    break
+                }
+                delay(1000L)
+            }
+        }
+    }
+
+    fun startOneHourDemo() {
+        viewModelScope.launch {
+            _isActivating.value = true
+            when (val res = licenseManager.startOneHourDemo()) {
+                is com.example.data.license.DemoStartResult.Success -> {
+                    // Seed 7 days of realistic grocery shop dummy data
+                    repository.seedDemoData()
+                    _isDemoMode.value = true
+                    _isDemoUsed.value = true
+                    _isDemoExpired.value = false
+                    _remainingDemoMillis.value = res.remainingMillis
+                    _isAppActivated.value = true
+                    // Auto-complete onboarding so demo enters dashboard directly with all 20 products
+                    if (!_shopConfig.value.isOnboardingCompleted) {
+                        val current = _shopConfig.value
+                        val updated = current.copy(
+                            shopName = if (current.shopName.isBlank() || current.shopName == "দোকান প্রো") "Dokan Pro" else current.shopName,
+                            isOnboardingCompleted = true
+                        )
+                        updateShopConfig(updated)
+                    }
+                    startDemoTimerTicker()
+                    _isActivating.value = false
+                    showToast(res.message.ifBlank { "১ ঘণ্টার ফ্রি ডেমো মোড চালু হয়েছে! ২০টি পণ্য ও ৭ দিনের ডামি ডাটা লোড করা হয়েছে।" })
+                }
+                is com.example.data.license.DemoStartResult.Expired -> {
+                    _isDemoMode.value = false
+                    _isDemoUsed.value = true
+                    _isDemoExpired.value = true
+                    _isAppActivated.value = false
+                    _isActivating.value = false
+                    showToast(res.message)
+                }
+                is com.example.data.license.DemoStartResult.Error -> {
+                    _isActivating.value = false
+                    showToast(res.message)
+                }
+            }
+        }
+    }
+
+    // Customer Personal Supabase Cloud Credentials & Sync State
+    private val _customerSupabaseUrl = MutableStateFlow(prefs.getString("customer_supabase_url", "") ?: "")
+    val customerSupabaseUrl: StateFlow<String> = _customerSupabaseUrl.asStateFlow()
+
+    private val _customerSupabaseKey = MutableStateFlow(prefs.getString("customer_supabase_key", "") ?: "")
+    val customerSupabaseKey: StateFlow<String> = _customerSupabaseKey.asStateFlow()
+
+    private val _isCustomerCloudConfigured = MutableStateFlow(
+        (prefs.getString("customer_supabase_url", "") ?: "").isNotBlank() &&
+        (prefs.getString("customer_supabase_key", "") ?: "").isNotBlank()
+    )
+    val isCustomerCloudConfigured: StateFlow<Boolean> = _isCustomerCloudConfigured.asStateFlow()
+
+    fun getDeviceId(): String = licenseManager.getDeviceId()
+
+    fun clearActivationError() {
+        _activationError.value = null
+    }
+
+    fun activateApp(email: String) {
+        viewModelScope.launch {
+            _isActivating.value = true
+            _activationError.value = null
+            when (val res = licenseManager.activateWithEmail(email)) {
+                is com.example.data.license.ActivationResult.Success -> {
+                    // CRITICAL REQUIREMENT: Real customer activated the app!
+                    // If demo was used or currently active, wipe all dummy data clean so they get a 100% fresh shop.
+                    val wasDemo = licenseManager.wasDemoUsed() || _isDemoMode.value
+                    if (wasDemo) {
+                        repository.clearAllDummyData()
+                        licenseManager.clearDemoState()
+                    }
+                    demoTimerJob?.cancel()
+                    _isDemoMode.value = false
+                    _isAppActivated.value = true
+                    _licenseInfo.value = res.info
+                    _isActivating.value = false
+                    showToast(res.message.ifBlank { "অভিনন্দন! Dokan-Pro সফলভাবে সক্রিয় হয়েছে" })
+                }
+                is com.example.data.license.ActivationResult.Error -> {
+                    _activationError.value = res.message
+                    _isActivating.value = false
+                }
+            }
+        }
+    }
 
     init {
         loadShopConfig()
         loadUnits()
         val db = PaponDatabase.getInstance(application)
         repository = PaponRepository(db.paponDao())
+
+        if (licenseManager.isDemoMode()) {
+            startDemoTimerTicker()
+        }
+
+        // Anti-abuse: Check hardware device ID in cloud on launch (e.g. if user did 'Clear Storage')
+        if (!licenseManager.isRealLicenseActive()) {
+            viewModelScope.launch {
+                licenseManager.syncDeviceDemoStatus()
+                _isDemoUsed.value = licenseManager.wasDemoUsed()
+                _isDemoExpired.value = licenseManager.isDemoExpired()
+                if (_isDemoExpired.value && _isDemoMode.value) {
+                    _isDemoMode.value = false
+                    _isAppActivated.value = false
+                }
+            }
+        }
         
+        // Initialize dynamic customer cloud credentials if configured
+        repository.updateCustomerCloudCredentials(_customerSupabaseUrl.value, _customerSupabaseKey.value)
+
         // Listen for network restoration to immediately sync offline changes
         networkMonitor.setOnNetworkRestoredCallback {
             viewModelScope.launch {
                 // Connection is back! Instantly push all offline sales, products, expenses & pull remote updates
-                syncToSupabase(silent = true)
+                if (_isCustomerCloudConfigured.value) {
+                    syncToSupabase(silent = true)
+                }
             }
         }
 
         viewModelScope.launch {
             repository.seedInitialDataIfEmpty()
-            // Initial sync (pull remote changes and push any local data)
-            syncToSupabase(silent = true)
-            // Start automatic background poll (pulls changes made in Supabase every 5s for realtime updates)
+            if (licenseManager.isDemoMode()) {
+                if (repository.getAllProductsSync().isEmpty()) {
+                    repository.seedDemoData()
+                }
+            }
+            // Initial sync (pull remote changes and push any local data if customer cloud configured)
+            if (_isCustomerCloudConfigured.value) {
+                syncToSupabase(silent = true)
+            }
+            // Start automatic background poll (pulls changes made in Supabase every 20s for realtime updates)
             startPeriodicSync()
             // Check for in-app updates from GitHub
             checkForUpdates(silent = true)
@@ -126,7 +309,7 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
             while (isActive) {
                 kotlinx.coroutines.delay(20_000) // 20 seconds background poll
                 try {
-                    if (networkMonitor.isCurrentlyOnline()) {
+                    if (_isCustomerCloudConfigured.value && networkMonitor.isCurrentlyOnline()) {
                         val result = repository.pullFromSupabase(force = false)
                         if (result.success) {
                             _lastSyncTime.value = System.currentTimeMillis()
@@ -182,6 +365,12 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
 
     fun syncToSupabase(silent: Boolean = false) {
         viewModelScope.launch {
+            if (!_isCustomerCloudConfigured.value) {
+                if (!silent) {
+                    showToast("কাস্টমার ক্লাউড সিঙ্ক সেটআপ করা নেই। Settings থেকে Supabase URL ও Key সেট করুন।")
+                }
+                return@launch
+            }
             if (!networkMonitor.isCurrentlyOnline() && silent) {
                 return@launch
             }
@@ -208,6 +397,69 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
             } finally {
                 _isSyncing.value = false
             }
+        }
+    }
+
+    fun saveCustomerCloudConfig(url: String, key: String, onComplete: () -> Unit = {}) {
+        val cleanUrl = url.trim().trimEnd('/')
+        val cleanKey = key.trim()
+        prefs.edit()
+            .putString("customer_supabase_url", cleanUrl)
+            .putString("customer_supabase_key", cleanKey)
+            .apply()
+        _customerSupabaseUrl.value = cleanUrl
+        _customerSupabaseKey.value = cleanKey
+        val isConf = cleanUrl.isNotBlank() && cleanKey.isNotBlank()
+        _isCustomerCloudConfigured.value = isConf
+        repository.updateCustomerCloudCredentials(cleanUrl, cleanKey)
+        showToast("সুপাবেস ক্লাউড সেটিংস সংরক্ষণ করা হয়েছে")
+        onComplete()
+    }
+
+    fun clearCustomerCloudConfig(onComplete: () -> Unit = {}) {
+        prefs.edit()
+            .remove("customer_supabase_url")
+            .remove("customer_supabase_key")
+            .apply()
+        _customerSupabaseUrl.value = ""
+        _customerSupabaseKey.value = ""
+        _isCustomerCloudConfigured.value = false
+        repository.updateCustomerCloudCredentials("", "")
+        showToast("ক্লাউড সংযোগ সফলভাবে বিচ্ছিন্ন করা হয়েছে")
+        onComplete()
+    }
+
+    fun testCustomerCloudConnection(url: String, key: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val res = repository.testCustomerCloudConnection(url, key)
+            showToast(res.second)
+            onResult(res.first, res.second)
+        }
+    }
+
+    fun backupToCustomerCloud(onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            _isSyncing.value = true
+            val res = repository.backupToCustomerCloud()
+            _isSyncing.value = false
+            if (res.first) {
+                _lastSyncTime.value = System.currentTimeMillis()
+            }
+            showToast(res.second)
+            onResult(res.first, res.second)
+        }
+    }
+
+    fun restoreFromCustomerCloud(onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            _isSyncing.value = true
+            val res = repository.restoreFromCustomerCloud()
+            _isSyncing.value = false
+            if (res.first) {
+                _lastSyncTime.value = System.currentTimeMillis()
+            }
+            showToast(res.second)
+            onResult(res.first, res.second)
         }
     }
 
@@ -487,18 +739,9 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val now = System.currentTimeMillis()
-                val prefix = _shopConfig.value.devicePrefix.ifBlank { "A" }.trim()
-                val invoice = "INV-${prefix}-${System.currentTimeMillis() % 1000000}"
-                val slot = when (prefix.uppercase()) {
-                    "A", "১" -> 1
-                    "B", "২" -> 2
-                    "C", "৩" -> 3
-                    "D", "৪" -> 4
-                    else -> (kotlin.math.abs(prefix.hashCode()) % 8 + 1)
-                }
-                val generatedSaleId = com.example.util.IdGenerator.nextId(slot)
+                val prefix = _shopConfig.value.devicePrefix.ifBlank { "A" }
+                val invoice = "INV-$prefix-${System.currentTimeMillis() % 1000000}"
                 val sale = Sale(
-                    id = generatedSaleId,
                     invoiceNo = invoice,
                     customerId = custId,
                     customerName = customer?.name,
@@ -598,25 +841,6 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun returnFullSale(saleId: Long, onSuccess: (() -> Unit)? = null) {
-        viewModelScope.launch {
-            val success = repository.returnFullSale(saleId)
-            if (success) {
-                showToast("সম্পূর্ণ বিক্রয় ফেরত নেওয়া হয়েছে এবং স্টক সমন্বয় করা হয়েছে")
-                if (_lastCompletedSale.value?.id == saleId) {
-                    val updated = repository.getSaleById(saleId)
-                    _lastCompletedSale.value = updated
-                    if (updated != null) {
-                        _lastCompletedSaleItems.value = repository.getSaleItems(saleId)
-                    }
-                }
-                onSuccess?.invoke()
-            } else {
-                showToast("বিক্রয় ফেরত প্রক্রিয়া করা যায়নি")
-            }
-        }
-    }
-
     fun adjustStock(productId: Long, productName: String, qtyChange: Double, reason: String, note: String?) {
         viewModelScope.launch {
             repository.adjustStock(productId, productName, qtyChange, reason, note)
@@ -625,10 +849,28 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- CUSTOMER & DUE COLLECTION ---
-    fun saveCustomer(customer: Customer, initialDuePoisha: Long = 0L, onSuccess: () -> Unit = {}) {
+    fun saveCustomer(
+        customer: Customer,
+        initialDuePoisha: Long = 0L,
+        initialDueNote: String? = null,
+        onSuccess: (Long) -> Unit = {}
+    ) {
         viewModelScope.launch {
-            repository.saveCustomer(customer, initialDuePoisha)
+            val id = repository.saveCustomer(customer, initialDuePoisha, initialDueNote)
             showToast("কাস্টমার সফলভাবে যোগ করা হয়েছে")
+            onSuccess(id)
+        }
+    }
+
+    fun addCustomerDue(
+        customerId: Long,
+        amountPoisha: Long,
+        note: String? = null,
+        onSuccess: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            repository.addCustomerDue(customerId, amountPoisha, note)
+            showToast("বাকি সফলভাবে যোগ করা হয়েছে")
             onSuccess()
         }
     }
@@ -726,11 +968,12 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun resetAllData() {
+    fun resetAllData(onSuccess: (() -> Unit)? = null) {
         viewModelScope.launch {
             repository.resetAllData()
             clearCart()
-            showToast("সব ডেটা রিসেট ও স্যাম্পল পণ্য যোগ করা হয়েছে")
+            showToast("২০টি স্যাম্পল পণ্য ও ডামি ডেটা সফলভাবে লোড করা হয়েছে!")
+            onSuccess?.invoke()
         }
     }
 
@@ -748,7 +991,7 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
-        if (password.trim() != "paponshop") {
+        if (password.trim().lowercase() != "dokanpro") {
             onError("ভুল পাসওয়ার্ড! সঠিক পাসওয়ার্ড লিখুন।")
             return
         }
@@ -819,6 +1062,7 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
 
     fun checkForUpdates(silent: Boolean = false) {
         viewModelScope.launch {
+            _isCheckingUpdate.value = true
             try {
                 val gitUpdate = AppUpdater.checkForUpdate()
                 if (gitUpdate != null) {
@@ -832,25 +1076,36 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
                         apkDownloadUrl = gitUpdate.downloadUrl,
                         isForceUpdate = false
                     )
+                    _showUpdateDialogEvent.value = true
                     if (!silent) {
                         showToast("নতুন আপডেট পাওয়া গেছে: v${gitUpdate.versionName}")
                     }
+                    _isCheckingUpdate.value = false
                     return@launch
                 }
 
-                val res = repository.pullFromSupabase(force = true)
-                if (res.configUpdates.isNotEmpty()) {
-                    applyRemoteConfig(res.configUpdates)
-                }
+                try {
+                    val res = repository.pullFromSupabase(force = true)
+                    if (res.configUpdates.isNotEmpty()) {
+                        applyRemoteConfig(res.configUpdates)
+                    }
+                } catch (_: Exception) { }
+
                 if (!silent) {
                     if (_appUpdateInfo.value.isUpdateAvailable) {
+                        _showUpdateDialogEvent.value = true
                         showToast("নতুন আপডেট পাওয়া গেছে: v${_appUpdateInfo.value.latestVersionName}")
                     } else {
                         showToast("আপনার অ্যাপটি সম্পূর্ণ আপ-টু-ডেট (v${BuildConfig.VERSION_NAME})")
                     }
                 }
             } catch (e: Exception) {
-                if (!silent) showToast("আপডেট চেক ব্যর্থ: ${e.message}")
+                e.printStackTrace()
+                if (!silent) {
+                    showToast("আপডেট চেক ব্যর্থ: ইন্টারনেট সংযোগ পরীক্ষা করুন")
+                }
+            } finally {
+                _isCheckingUpdate.value = false
             }
         }
     }
@@ -891,7 +1146,8 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun loadShopConfig() {
         try {
-            val shopName = prefs.getString("shop_name", "পাপন শপ") ?: "পাপন শপ"
+            val rawShopName = prefs.getString("shop_name", "Dokan Pro") ?: "Dokan Pro"
+            val shopName = if (rawShopName == "দোকান প্রো" || rawShopName.isBlank()) "Dokan Pro" else rawShopName
             val shopAddress = prefs.getString("shop_address", "বাজার রোড, ঢাকা") ?: "বাজার রোড, ঢাকা"
             val shopPhone = prefs.getString("shop_phone", "০১৭১১-০০০০০০") ?: "০১৭১১-০০০০০০"
             val tagline = prefs.getString("tagline", "আপনার বিশ্বস্ত মুদি দোকান") ?: "আপনার বিশ্বস্ত মুদি দোকান"
@@ -904,9 +1160,8 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
             val pinCode = prefs.getString("pin_code", "1234") ?: "1234"
             val userRole = prefs.getString("user_role", "owner") ?: "owner"
             val allowNegativeStock = prefs.getBoolean("allow_negative_stock", true)
+            val isOnboardingCompleted = prefs.getBoolean("is_onboarding_completed", false)
             val noticeMessage = prefs.getString("notice_message", "") ?: ""
-            val devicePrefix = prefs.getString("device_prefix", "A") ?: "A"
-            val deviceName = prefs.getString("device_name", "কাউন্টার ১") ?: "কাউন্টার ১"
 
             _shopConfig.value = ShopConfig(
                 shopName = shopName,
@@ -922,10 +1177,8 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
                 pinCode = pinCode,
                 userRole = userRole,
                 allowNegativeStock = allowNegativeStock,
-                isOnboardingCompleted = true,
-                noticeMessage = noticeMessage,
-                devicePrefix = devicePrefix,
-                deviceName = deviceName
+                isOnboardingCompleted = isOnboardingCompleted,
+                noticeMessage = noticeMessage
             )
         } catch (_: Exception) {}
     }
@@ -946,9 +1199,8 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
                 putString("pin_code", config.pinCode)
                 putString("user_role", config.userRole)
                 putBoolean("allow_negative_stock", config.allowNegativeStock)
+                putBoolean("is_onboarding_completed", config.isOnboardingCompleted)
                 putString("notice_message", config.noticeMessage)
-                putString("device_prefix", config.devicePrefix)
-                putString("device_name", config.deviceName)
                 apply()
             }
         } catch (_: Exception) {}
@@ -1079,3 +1331,5 @@ class PaponViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 }
+
+typealias DokanProViewModel = PaponViewModel

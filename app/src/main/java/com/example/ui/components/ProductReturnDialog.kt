@@ -1,7 +1,6 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,7 +25,6 @@ import com.example.data.entity.SaleItem
 import com.example.ui.ShopConfig
 import com.example.ui.theme.StatusDanger
 import com.example.ui.theme.StatusSuccess
-import com.example.ui.theme.StatusWarning
 import com.example.util.Formatters
 
 @Composable
@@ -49,7 +47,6 @@ fun ProductReturnDialog(
     // Set of selected saleItemIds
     val selectedItemIds = remember {
         mutableStateListOf<Long>().apply {
-            // Default select all if full invoice return, or empty
             items.forEach { add(it.id) }
         }
     }
@@ -269,7 +266,7 @@ fun ProductReturnDialog(
 
                                 // Quantity Stepper (if item is selected and not in full invoice return mode)
                                 if (isSelected && !isFullInvoiceReturn) {
-                                    Divider(
+                                    HorizontalDivider(
                                         modifier = Modifier.padding(vertical = 6.dp),
                                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                                     )

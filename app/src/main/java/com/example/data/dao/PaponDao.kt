@@ -160,6 +160,9 @@ interface PaponDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSupplierLedger(ledger: SupplierLedger): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSupplierLedgers(ledgers: List<SupplierLedger>)
+
     @Query("SELECT * FROM supplier_ledger WHERE supplierId = :supplierId ORDER BY entryDate DESC")
     fun getSupplierLedger(supplierId: Long): Flow<List<SupplierLedger>>
 
@@ -221,6 +224,9 @@ interface PaponDao {
     @Query("SELECT * FROM purchases")
     suspend fun getAllPurchasesSync(): List<Purchase>
 
+    @Query("SELECT * FROM purchase_items")
+    suspend fun getAllPurchaseItemsSync(): List<PurchaseItem>
+
     @Query("SELECT * FROM expenses")
     suspend fun getAllExpensesSync(): List<Expense>
 
@@ -250,6 +256,9 @@ interface PaponDao {
 
     @Query("DELETE FROM suppliers")
     suspend fun clearSuppliers()
+
+    @Query("DELETE FROM supplier_ledger")
+    suspend fun clearSupplierLedger()
 
     @Query("DELETE FROM stock_adjustments")
     suspend fun clearStockAdjustments()

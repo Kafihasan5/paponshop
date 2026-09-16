@@ -500,7 +500,7 @@ object InvoiceImageHelper {
                 val desc = when (entry.refType) {
                     "sale" -> "পণ্য ক্রয় (বাকি)"
                     "payment" -> "বাকি পরিশোধ/জমা"
-                    "opening_due" -> "পূর্বের বকেয়া / শুরুর বাকি"
+                    "opening_due", "opening_balance" -> "পূর্বের বকেয়া / শুরুর বাকি"
                     "sale_return" -> "ফেরত সমন্বয়"
                     else -> entry.note ?: "সমন্বয়"
                 }
